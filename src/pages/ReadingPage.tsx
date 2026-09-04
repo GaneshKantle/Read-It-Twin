@@ -15,8 +15,8 @@ import { useTabFocusGuard } from '@/hooks/useTabFocusGuard';
 import { cn } from '@/lib/cn';
 import { minimumReadMs } from '@/lib/reading';
 
-/** How long the finish overlay plays before the summary takes over. */
-const HANDOFF_MS = 1800;
+/** How long the finish overlay plays before the quiz takes over. */
+const HANDOFF_MS = 1100;
 
 export function ReadingPage() {
   const navigate = useNavigate();
@@ -39,7 +39,7 @@ export function ReadingPage() {
       return;
     }
 
-    const timeout = window.setTimeout(() => navigate('/play/finish'), HANDOFF_MS);
+    const timeout = window.setTimeout(() => navigate('/play/quiz'), HANDOFF_MS);
 
     return () => window.clearTimeout(timeout);
   }, [navigate, phase]);

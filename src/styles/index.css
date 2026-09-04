@@ -9,6 +9,7 @@
   --text-heading: clamp(2rem, 4vw, 3.25rem);
   --text-subheading: 1.125rem;
   --text-body: 1rem;
+  --text-small: 0.875rem;
   --text-label: 0.72rem;
   --text-eyebrow: 0.75rem;
   --text-stat: clamp(2rem, 5vw, 4rem);

@@ -3,8 +3,9 @@ import { App } from '@/app/App';
 import { RunLayout } from '@/app/RunLayout';
 import { DesignSystemPage } from '@/pages/DesignSystemPage';
 import { HomePage } from '@/pages/HomePage';
+import { QuizPage } from '@/pages/QuizPage';
 import { ReadingPage } from '@/pages/ReadingPage';
-import { RunSummaryPage } from '@/pages/RunSummaryPage';
+import { ResultsPage } from '@/pages/ResultsPage';
 import { SetupPage } from '@/pages/SetupPage';
 
 export const router = createBrowserRouter([
@@ -35,8 +36,12 @@ export const router = createBrowserRouter([
         element: <ReadingPage />,
       },
       {
-        path: 'finish',
-        element: <RunSummaryPage />,
+        path: 'quiz',
+        element: <QuizPage />,
+      },
+      {
+        path: 'results',
+        element: <ResultsPage />,
       },
     ],
   },

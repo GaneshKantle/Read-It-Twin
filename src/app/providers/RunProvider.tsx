@@ -1,9 +1,11 @@
 import { createContext, useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { selectPassage } from '@/data/passages';
 import { calculateWpm } from '@/lib/reading';
+import { buildGameResult } from '@/lib/scoring';
 import type {
   CategoryFilter,
   Difficulty,
+  GameResult,
   Passage,
   RunConfig,
   RunPhase,
@@ -25,6 +27,11 @@ interface RunContextValue {
   startedPerf: number | null;
   focusLossCount: number;
   result: RunResult | null;
+  /** One entry per question, null until the reader picks an option. */
+  selections: (number | null)[];
+  selectAnswer: (questionIndex: number, optionIndex: number) => void;
+  submitQuiz: () => void;
+  gameResult: GameResult | null;
   startRun: () => void;
   beginReading: () => void;
   finishRun: () => void;
@@ -41,6 +48,8 @@ export function RunProvider({ children }: { children: ReactNode }) {
   const [startedPerf, setStartedPerf] = useState<number | null>(null);
   const [focusLossCount, setFocusLossCount] = useState(0);
   const [result, setResult] = useState<RunResult | null>(null);
+  const [selections, setSelections] = useState<(number | null)[]>([]);
+  const [gameResult, setGameResult] = useState<GameResult | null>(null);
 
   /** Kept so a second run in a row does not hand back the same passage. */
   const lastPassageId = useRef<string | undefined>(undefined);
@@ -63,6 +72,8 @@ export function RunProvider({ children }: { children: ReactNode }) {
     setStartedPerf(null);
     setFocusLossCount(0);
     setResult(null);
+    setSelections(new Array(next.questions.length).fill(null));
+    setGameResult(null);
   }, [config.category, config.difficulty]);
 
   const beginReading = useCallback(() => {
@@ -93,6 +104,23 @@ export function RunProvider({ children }: { children: ReactNode }) {
     setPhase('finishing');
   }, [focusLossCount, passage, startedPerf]);
 
+  const selectAnswer = useCallback((questionIndex: number, optionIndex: number) => {
+    setSelections((current) => {
+      const next = [...current];
+      next[questionIndex] = optionIndex;
+
+      return next;
+    });
+  }, []);
+
+  const submitQuiz = useCallback(() => {
+    if (!passage || !result) {
+      return;
+    }
+
+    setGameResult(buildGameResult(result, passage.questions, selections));
+  }, [passage, result, selections]);
+
   const registerFocusLoss = useCallback(() => {
     setFocusLossCount((count) => count + 1);
   }, []);
@@ -103,6 +131,8 @@ export function RunProvider({ children }: { children: ReactNode }) {
     setStartedPerf(null);
     setFocusLossCount(0);
     setResult(null);
+    setSelections([]);
+    setGameResult(null);
   }, []);
 
   const value = useMemo(
@@ -115,6 +145,10 @@ export function RunProvider({ children }: { children: ReactNode }) {
       startedPerf,
       focusLossCount,
       result,
+      selections,
+      selectAnswer,
+      submitQuiz,
+      gameResult,
       startRun,
       beginReading,
       finishRun,
@@ -126,15 +160,19 @@ export function RunProvider({ children }: { children: ReactNode }) {
       config,
       finishRun,
       focusLossCount,
+      gameResult,
       passage,
       phase,
       registerFocusLoss,
       result,
       resetRun,
+      selectAnswer,
+      selections,
       setCategory,
       setDifficulty,
       startRun,
       startedPerf,
+      submitQuiz,
     ],
   );
 

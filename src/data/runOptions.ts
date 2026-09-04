@@ -1,4 +1,11 @@
-import { categories, difficulties, type Category, type CategoryFilter, type Difficulty } from '@/types/run';
+import {
+  categories,
+  difficulties,
+  type Category,
+  type CategoryFilter,
+  type Difficulty,
+  type QuestionType,
+} from '@/types/run';
 
 export const difficultyOptions: { value: Difficulty; label: string; hint: string }[] = [
   { value: 'easy', label: 'Easy', hint: 'Warm up' },
@@ -30,4 +37,17 @@ export function categoryLabel(category: Category): string {
 
 export function difficultyLabel(difficulty: Difficulty): string {
   return difficultyOptions[difficulties.indexOf(difficulty)].label;
+}
+
+const questionTypeLabels: Record<QuestionType, string> = {
+  'main-idea': 'Main idea',
+  detail: 'Detail',
+  inference: 'Inference',
+  sequence: 'Sequence',
+  vocabulary: 'In context',
+  fact: 'Fact',
+};
+
+export function questionTypeLabel(type: QuestionType): string {
+  return questionTypeLabels[type];
 }

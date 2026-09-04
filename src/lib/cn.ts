@@ -16,6 +16,7 @@ const twMerge = extendTailwindMerge({
             'heading',
             'subheading',
             'body',
+            'small',
             'label',
             'eyebrow',
             'stat',
