@@ -12,6 +12,7 @@
   --text-label: 0.72rem;
   --text-eyebrow: 0.75rem;
   --text-stat: clamp(2rem, 5vw, 4rem);
+  --text-reading: clamp(1.125rem, 0.95rem + 0.6vw, 1.3125rem);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);

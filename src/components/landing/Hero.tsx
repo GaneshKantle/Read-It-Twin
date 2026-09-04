@@ -1,5 +1,6 @@
 import { ArrowRight, Swords } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Container } from '@/components/layout/Container';
 import { Text } from '@/components/ui/Text';
@@ -19,6 +20,8 @@ const heroIndex = [
 const tagline = ['Two people', 'One passage', 'One winner'];
 
 export function Hero() {
+  const navigate = useNavigate();
+
   return (
     <section className="relative">
       <Container>
@@ -91,11 +94,16 @@ export function Hero() {
               </motion.div>
 
               <motion.div variants={fadeUp} className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <Button size="lg" className="w-full sm:w-auto">
+                <Button size="lg" className="w-full sm:w-auto" onClick={() => navigate('/play')}>
                   Start Reading
                   <ArrowRight className="h-4 w-4" />
                 </Button>
-                <Button size="lg" variant="secondary" className="w-full sm:w-auto">
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  className="w-full sm:w-auto"
+                  title="Multiplayer is coming next"
+                >
                   Challenge a Friend
                   <Swords className="h-4 w-4" />
                 </Button>

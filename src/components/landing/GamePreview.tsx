@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Container } from '@/components/layout/Container';
-import { CountUp } from '@/components/landing/CountUp';
+import { CountUp } from '@/components/motion/CountUp';
 import { Text } from '@/components/ui/Text';
 import { cn } from '@/lib/cn';
 import { fadeUp, motionEase, motionTiming, sectionViewport, staggerContainer } from '@/lib/motion';
