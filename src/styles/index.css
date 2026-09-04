@@ -1,18 +1,23 @@
-@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Fraunces:opsz,wght,SOFT@9..144,400..700,50&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Caveat:wght@500;600;700&display=swap');
 @import 'tailwindcss';
 
-@theme {
-  --font-sans: 'Figtree', ui-sans-serif, system-ui, sans-serif;
-  --font-display: 'Fraunces', ui-serif, Georgia, serif;
+/* The theme toggle writes a class, so `dark:` has to follow the class, not the OS. */
+@custom-variant dark (&:where(.dark, .dark *));
 
-  --text-display: clamp(3rem, 7vw, 6rem);
-  --text-heading: clamp(2rem, 4vw, 3.25rem);
-  --text-subheading: 1.125rem;
+@theme {
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Bricolage Grotesque', 'Plus Jakarta Sans', ui-sans-serif, sans-serif;
+  --font-hand: 'Caveat', ui-serif, cursive;
+
+  --text-display: clamp(3.25rem, 9vw, 8rem);
+  --text-heading: clamp(2.25rem, 5.5vw, 4.5rem);
+  --text-subheading: clamp(1.125rem, 0.95rem + 0.7vw, 1.5rem);
   --text-body: 1rem;
-  --text-small: 0.875rem;
-  --text-label: 0.72rem;
-  --text-eyebrow: 0.75rem;
-  --text-stat: clamp(2rem, 5vw, 4rem);
+  --text-small: 0.9rem;
+  --text-label: 0.8125rem;
+  --text-eyebrow: 0.8125rem;
+  --text-hand: clamp(1.25rem, 0.9rem + 1.2vw, 1.875rem);
+  --text-stat: clamp(2.5rem, 6vw, 4.5rem);
   --text-reading: clamp(1.125rem, 0.95rem + 0.6vw, 1.3125rem);
 
   --color-background: var(--background);
@@ -28,48 +33,144 @@
   --color-danger: var(--danger);
   --color-danger-foreground: var(--danger-foreground);
 
-  --radius-sm: 0.375rem;
-  --radius-md: 0.875rem;
-  --radius-lg: 1.5rem;
+  /* Candy hues. Used for chips, blobs, frames and headings in both themes. */
+  --color-yellow: var(--yellow);
+  --color-pale-yellow: var(--pale-yellow);
+  --color-orange: var(--orange);
+  --color-soft-orange: var(--soft-orange);
+  --color-pink: var(--pink);
+  --color-magenta: var(--magenta);
+  --color-soft-pink: var(--soft-pink);
+  --color-violet: var(--violet);
+  --color-periwinkle: var(--periwinkle);
+  --color-cyan: var(--cyan);
+  --color-lime: var(--lime);
 
-  --shadow-soft: 0 20px 50px rgba(37, 30, 22, 0.08);
-  --shadow-press: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 8px 20px rgba(31, 23, 18, 0.06);
+  /* Full-bleed section fills. Bright in light, deep jewel tones in dark. */
+  --color-sec-yellow: var(--sec-yellow);
+  --color-sec-pink: var(--sec-pink);
+  --color-sec-magenta: var(--sec-magenta);
+  --color-sec-cyan: var(--sec-cyan);
+  --color-sec-violet: var(--sec-violet);
+  --color-sec-plain: var(--sec-plain);
 
-  --ease-fluid: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Text and hairlines that sit on top of a candy section. */
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+
+  /* Nav pills and quiet chips: bright in light, sunk into the page in dark. */
+  --color-chip: var(--chip);
+  --color-chip-foreground: var(--chip-foreground);
+
+  /* The reading column keeps its own quiet pair so the passage never sits on candy. */
+  --color-reading-page: var(--reading-page);
+  --color-reading-card: var(--reading-card);
+  --color-reading-ink: var(--reading-ink);
+
+  --radius-sm: 0.625rem;
+  --radius-md: 1.125rem;
+  --radius-lg: 2rem;
+  --radius-xl: 3rem;
+
+  --shadow-soft: 0 18px 44px rgba(24, 12, 48, 0.1);
+  --shadow-press: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 8px 20px rgba(24, 12, 48, 0.08);
+  --shadow-pop: 0 14px 34px rgba(24, 12, 48, 0.16);
+
+  /* Aardvark's "osmo" curve, rebuilt as a plain cubic-bezier. */
+  --ease-fluid: cubic-bezier(0.625, 0.05, 0, 1);
   --duration-fast: 200ms;
   --duration-base: 320ms;
 }
 
 :root {
   color-scheme: light;
-  --background: #f4f0e6;
-  --foreground: #1c1915;
-  --muted-foreground: #6f675e;
-  --border: #d7d0c7;
-  --surface: #fbf8f2;
-  --surface-raised: #f8f4ed;
-  --accent: #9f5f49;
-  --accent-foreground: #fffaf5;
-  --success: #5f7f64;
-  --warning: #ae7b46;
-  --danger: #9d4d43;
-  --danger-foreground: #fff7f5;
+  --background: #ffffff;
+  --foreground: #000000;
+  --muted-foreground: #5d5a66;
+  --border: #e5e1ea;
+  --surface: #ffffff;
+  --surface-raised: #f7f4f0;
+  --accent: #ff008c;
+  --accent-foreground: #ffffff;
+  --success: #1f8f3a;
+  --warning: #b06f0c;
+  --danger: #cf1846;
+  --danger-foreground: #ffffff;
+
+  --yellow: #ffd24a;
+  --pale-yellow: #faed8f;
+  --orange: #f9a220;
+  --soft-orange: #fddaa6;
+  --pink: #fd48f2;
+  --magenta: #ff008c;
+  --soft-pink: #ffdbfd;
+  --violet: #3b308f;
+  --periwinkle: #9982de;
+  --cyan: #1ce8ed;
+  --lime: #2de124;
+
+  --sec-yellow: #ffd24a;
+  --sec-pink: #ffdbfd;
+  --sec-magenta: #fd48f2;
+  --sec-cyan: #a4f6f8;
+  --sec-violet: #9982de;
+  --sec-plain: #ffffff;
+
+  --ink: #000000;
+  --ink-muted: rgba(0, 0, 0, 0.62);
+
+  --chip: #faed8f;
+  --chip-foreground: #000000;
+
+  --reading-page: #faf7f1;
+  --reading-card: #ffffff;
+  --reading-ink: #000000;
 }
 
 .dark {
   color-scheme: dark;
-  --background: #141311;
-  --foreground: #f3eee7;
-  --muted-foreground: #b0a79b;
-  --border: #2b2824;
-  --surface: #1b1917;
-  --surface-raised: #221f1c;
-  --accent: #c4866e;
-  --accent-foreground: #1a1512;
-  --success: #6f9a75;
-  --warning: #d09c68;
-  --danger: #cb7f76;
-  --danger-foreground: #221614;
+  --background: #16133a;
+  --foreground: #f7f4ff;
+  --muted-foreground: #a79ed0;
+  --border: #322c69;
+  --surface: #221e4a;
+  --surface-raised: #2b2559;
+  --accent: #fd48f2;
+  --accent-foreground: #1a0f2e;
+  --success: #4fd97a;
+  --warning: #ffc061;
+  --danger: #ff6f92;
+  --danger-foreground: #2a0d18;
+
+  --yellow: #f4c65a;
+  --pale-yellow: #efe3a0;
+  --orange: #f0a044;
+  --soft-orange: #c79a5f;
+  --pink: #f776ee;
+  --magenta: #ff5fae;
+  --soft-pink: #d9a9d8;
+  --violet: #a99bf0;
+  --periwinkle: #b3a4ee;
+  --cyan: #63e6ea;
+  --lime: #6ce463;
+
+  --sec-yellow: #2b2352;
+  --sec-pink: #2c1c4d;
+  --sec-magenta: #3a1650;
+  --sec-cyan: #13284f;
+  --sec-violet: #241f52;
+  --sec-plain: #16133a;
+
+  --ink: #f7f4ff;
+  --ink-muted: rgba(247, 244, 255, 0.68);
+
+  --chip: #2b2559;
+  --chip-foreground: #f7f4ff;
+
+  /* Dim cream card on the night-club page so the passage still has print contrast. */
+  --reading-page: #100d2c;
+  --reading-card: #f4efe4;
+  --reading-ink: #1a1528;
 }
 
 @layer base {
@@ -84,7 +185,6 @@
       background-color var(--duration-base) var(--ease-fluid),
       color var(--duration-base) var(--ease-fluid),
       border-color var(--duration-base) var(--ease-fluid);
-    scroll-behavior: smooth;
   }
 
   body {
@@ -109,8 +209,26 @@
   }
 
   ::selection {
-    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    background: color-mix(in srgb, var(--accent) 26%, transparent);
   }
+}
+
+/* Lenis owns the scroll position on the marketing routes. */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
 }
 
 @layer utilities {
@@ -124,6 +242,16 @@
 
   .shadow-press {
     box-shadow: var(--shadow-press);
+  }
+
+  .shadow-pop {
+    box-shadow: var(--shadow-pop);
+  }
+
+  /* Big rounded shoulders where one candy section meets the next. */
+  .section-shoulder {
+    border-top-left-radius: clamp(1.5rem, 4vw, 3.5rem);
+    border-top-right-radius: clamp(1.5rem, 4vw, 3.5rem);
   }
 }
 

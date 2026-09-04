@@ -1,6 +1,7 @@
 import { createContext, useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { selectPassage } from '@/data/passages';
 import { calculateWpm } from '@/lib/reading';
+import { clearResultSnapshot, saveResultSnapshot } from '@/lib/resultSnapshot';
 import { buildGameResult } from '@/lib/scoring';
 import type {
   CategoryFilter,
@@ -67,6 +68,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
     const next = selectPassage(config.difficulty, config.category, lastPassageId.current);
     lastPassageId.current = next.id;
 
+    clearResultSnapshot();
     setPassage(next);
     setPhase('countdown');
     setStartedPerf(null);
@@ -118,7 +120,9 @@ export function RunProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    setGameResult(buildGameResult(result, passage.questions, selections));
+    const next = buildGameResult(result, passage.questions, selections);
+    saveResultSnapshot(next);
+    setGameResult(next);
   }, [passage, result, selections]);
 
   const registerFocusLoss = useCallback(() => {
@@ -126,6 +130,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const resetRun = useCallback(() => {
+    clearResultSnapshot();
     setPassage(null);
     setPhase('countdown');
     setStartedPerf(null);

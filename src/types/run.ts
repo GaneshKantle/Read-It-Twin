@@ -97,3 +97,32 @@ export interface GameResult {
   finishedAt: number;
   focusLossCount: number;
 }
+
+/**
+ * One reader's numbers, flattened for display and comparison. Solo renders a
+ * single one of these; a match will later render two side by side.
+ */
+export interface PlayerResult {
+  nickname: string;
+  /** Whole seconds spent reading. */
+  readingTime: number;
+  wpm: number;
+  /** Percentage, 0-100. */
+  comprehension: number;
+  correctAnswers: number;
+  totalQuestions: number;
+  finalScore: number;
+}
+
+/** Which shape the result screen takes. Only `solo` is reachable today. */
+export type ResultOutcome = 'solo' | 'win' | 'loss' | 'draw';
+
+export type ComparisonWinner = 'playerA' | 'playerB' | 'draw';
+
+/** Signed gaps between two players, always measured as A minus B. */
+export interface ResultComparison {
+  winner: ComparisonWinner;
+  wpmDifference: number;
+  comprehensionDifference: number;
+  scoreDifference: number;
+}

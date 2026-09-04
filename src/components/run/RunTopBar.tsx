@@ -11,12 +11,13 @@ interface RunTopBarProps {
 
 export function RunTopBar({ backTo, backLabel }: RunTopBarProps) {
   return (
-    <header className="border-b border-border">
+    <header>
       <Container className="flex items-center justify-between gap-4 py-4">
         <Link
           to={backTo}
           className={cn(
-            'inline-flex items-center gap-2 rounded-sm text-label font-medium uppercase tracking-[0.14em] text-muted-foreground transition-colors duration-fast ease-fluid hover:text-foreground',
+            'inline-flex items-center gap-2 rounded-full bg-chip px-4 py-2.5 text-label font-bold text-chip-foreground',
+            'transition-transform duration-fast ease-fluid hover:-translate-y-0.5',
             'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background',
           )}
         >

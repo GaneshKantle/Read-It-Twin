@@ -18,33 +18,30 @@ export function OptionChip({ label, hint, selected, onSelect, indicatorId }: Opt
       onClick={onSelect}
       aria-pressed={selected}
       className={cn(
-        'group relative isolate flex flex-col items-start gap-1 rounded-md border px-4 py-3 text-left',
-        'transition-colors duration-fast ease-fluid',
+        'group relative isolate flex flex-col items-start gap-0.5 rounded-full border-2 px-5 py-3 text-left',
+        'transition-all duration-fast ease-fluid',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-        selected ? 'border-foreground' : 'border-border hover:border-foreground/40 hover:bg-surface',
+        selected
+          ? 'border-ink'
+          : 'border-border hover:-translate-y-0.5 hover:border-foreground/40 hover:bg-surface-raised',
       )}
     >
       {selected && (
         <motion.span
           layoutId={indicatorId}
           aria-hidden="true"
-          className="absolute inset-0 -z-10 rounded-md bg-foreground"
+          className="absolute inset-0 -z-10 rounded-full bg-yellow"
           transition={{ duration: motionTiming.base, ease: motionEase }}
         />
       )}
-      <span
-        className={cn(
-          'text-label font-medium uppercase tracking-[0.16em]',
-          selected ? 'text-background' : 'text-foreground',
-        )}
-      >
+      <span className={cn('text-label font-bold', selected ? 'text-black' : 'text-foreground')}>
         {label}
       </span>
       {hint && (
         <span
           className={cn(
-            'text-eyebrow tracking-[0.14em]',
-            selected ? 'text-background/70' : 'text-muted-foreground',
+            'text-[0.75rem] font-semibold',
+            selected ? 'text-black/65' : 'text-muted-foreground',
           )}
         >
           {hint}

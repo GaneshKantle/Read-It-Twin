@@ -6,12 +6,12 @@ import { motionEase } from '@/lib/motion';
 export function ScoringOverlay() {
   return (
     <RunOverlay>
-      <Text as="p" variant="eyebrow">
+      <Text as="p" variant="hand">
         Calculating your run
       </Text>
-      <div className="h-px w-32 overflow-hidden bg-border">
+      <div className="h-2 w-40 overflow-hidden rounded-full bg-border/60">
         <motion.div
-          className="h-px origin-left bg-foreground"
+          className="h-2 origin-left rounded-full bg-accent"
           initial={{ scaleX: 0 }}
           animate={{ scaleX: 1 }}
           transition={{ duration: 1, ease: motionEase }}

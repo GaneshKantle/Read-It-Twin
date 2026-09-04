@@ -1,7 +1,16 @@
 import type { ComponentPropsWithoutRef, ElementType, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
-type TextVariant = 'display' | 'heading' | 'subheading' | 'body' | 'label' | 'eyebrow' | 'stat';
+type TextVariant =
+  | 'display'
+  | 'heading'
+  | 'subheading'
+  | 'body'
+  | 'small'
+  | 'label'
+  | 'eyebrow'
+  | 'stat'
+  | 'hand';
 
 type TextProps<T extends ElementType> = {
   as?: T;
@@ -11,13 +20,15 @@ type TextProps<T extends ElementType> = {
 } & Omit<ComponentPropsWithoutRef<T>, 'as' | 'children' | 'className'>;
 
 const variantClasses: Record<TextVariant, string> = {
-  display: 'font-display text-display tracking-[-0.05em] text-balance',
-  heading: 'font-display text-heading tracking-[-0.04em] text-balance',
-  subheading: 'text-subheading font-medium tracking-[-0.02em]',
-  body: 'text-body leading-7 text-foreground/92',
-  label: 'text-label font-medium uppercase tracking-[0.14em]',
-  eyebrow: 'text-eyebrow uppercase tracking-[0.22em] text-muted-foreground',
-  stat: 'text-stat font-semibold tracking-[-0.04em] tabular-nums',
+  display: 'font-display text-display font-extrabold leading-[0.82] tracking-[-0.025em] text-balance',
+  heading: 'font-display text-heading font-extrabold leading-[0.86] tracking-[-0.02em] text-balance',
+  subheading: 'text-subheading font-semibold leading-[1.25] tracking-[-0.01em]',
+  body: 'text-body font-medium leading-[1.55]',
+  small: 'text-small leading-6',
+  label: 'text-label font-bold leading-tight',
+  eyebrow: 'text-eyebrow font-semibold text-muted-foreground',
+  stat: 'font-display text-stat font-extrabold tracking-[-0.03em] tabular-nums',
+  hand: 'font-hand text-hand font-semibold leading-[1.05] text-violet',
 };
 
 export function Text<T extends ElementType = 'p'>({

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowRight } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Container } from '@/components/layout/Container';
@@ -136,18 +135,18 @@ export function QuizPage() {
                 </motion.div>
               </AnimatePresence>
 
-              <div className="mt-10 flex flex-col gap-4 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between">
-                <Text as="p" variant="eyebrow">
+              <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <Text as="p" variant="hand">
                   {selectedIndex === null ? 'Pick an answer to continue' : 'A to D, or enter'}
                 </Text>
                 <Button
                   size="lg"
+                  arrow
                   className="w-full sm:w-auto"
                   disabled={selectedIndex === null}
                   onClick={handleNext}
                 >
                   {isLast ? 'See score' : 'Next'}
-                  <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
             </div>

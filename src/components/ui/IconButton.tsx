@@ -8,16 +8,16 @@ interface IconButtonProps extends Omit<ButtonProps, 'children'> {
 }
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { className, icon, label, ...props },
+  { className, icon, label, variant = 'chip', ...props },
   ref,
 ) {
   return (
     <Button
       ref={ref}
       size="sm"
-      variant="ghost"
+      variant={variant}
       aria-label={label}
-      className={cn('h-10 w-10 rounded-full px-0', className)}
+      className={cn('h-11 w-11 rounded-full px-0', className)}
       {...props}
     >
       {icon}

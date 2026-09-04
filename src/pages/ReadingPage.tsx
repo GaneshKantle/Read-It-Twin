@@ -66,29 +66,39 @@ export function ReadingPage() {
         progress={scrollYProgress}
       />
 
-      <main className="flex-1">
-        <article ref={articleRef} className={cn(readingShell, 'pb-20 pt-10 sm:pb-28 sm:pt-16')}>
-          <header>
-            <Text as="p" variant="eyebrow">
-              {categoryLabel(passage.category)} / {difficultyLabel(passage.difficulty)}
-            </Text>
-            <h1 className="mt-4 font-display text-[clamp(2rem,6vw,3.25rem)] uppercase leading-[0.95] tracking-[-0.04em]">
-              {passage.title}
-            </h1>
-            <div className="mt-8 h-px w-full bg-border sm:mt-10" />
-          </header>
+      {/* The passage sits on its own quiet pair of surfaces: no blobs, no candy. */}
+      <main className="flex-1 bg-reading-page">
+        <div className={cn(readingShell, 'pb-16 pt-6 sm:pb-24 sm:pt-10')}>
+          <article
+            ref={articleRef}
+            className="rounded-lg border-2 border-black/10 bg-reading-card px-6 py-10 text-reading-ink shadow-soft sm:px-10 sm:py-14"
+          >
+            <header>
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-full bg-yellow px-3.5 py-1.5 text-[0.72rem] font-bold text-black">
+                  {categoryLabel(passage.category)}
+                </span>
+                <span className="rounded-full border border-black/15 px-3.5 py-1.5 text-[0.72rem] font-bold text-black/55">
+                  {difficultyLabel(passage.difficulty)}
+                </span>
+              </div>
+              <h1 className="mt-5 font-display text-[clamp(2rem,5.5vw,3rem)] font-extrabold leading-[0.92] tracking-[-0.03em]">
+                {passage.title}
+              </h1>
+            </header>
 
-          <div className="mt-8 select-none space-y-6 text-reading leading-[1.75] text-foreground/92 sm:mt-10 sm:space-y-7">
-            {passage.paragraphs.map((paragraph, index) => (
-              <p key={index}>{paragraph}</p>
-            ))}
-          </div>
+            <div className="mt-8 select-none space-y-6 text-reading leading-[1.75] text-reading-ink/90 sm:mt-10 sm:space-y-7">
+              {passage.paragraphs.map((paragraph, index) => (
+                <p key={index}>{paragraph}</p>
+              ))}
+            </div>
 
-          <div ref={endRef} aria-hidden="true" className="h-px w-full" />
+            <div ref={endRef} aria-hidden="true" className="h-px w-full" />
+          </article>
 
-          <footer className="mt-14 border-t border-border pt-6 sm:mt-20">
+          <footer className="mt-8">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <Text as="p" variant="eyebrow" aria-live="polite">
+              <Text as="p" variant="hand" aria-live="polite">
                 {hint}
               </Text>
               <Button
@@ -102,13 +112,13 @@ export function ReadingPage() {
             </div>
 
             {focusLossCount > 0 && (
-              <Text as="p" variant="eyebrow" className="mt-4 text-muted-foreground">
+              <Text as="p" variant="small" className="mt-4 font-semibold text-muted-foreground">
                 You left the tab {focusLossCount === 1 ? 'once' : `${focusLossCount} times`}. Noted,
                 not judged.
               </Text>
             )}
           </footer>
-        </article>
+        </div>
       </main>
 
       <AnimatePresence>

@@ -1,19 +1,19 @@
 import { Check } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { RunOverlay } from '@/components/run/RunOverlay';
-import { motionEase, motionTiming } from '@/lib/motion';
+import { springPlop } from '@/lib/motion';
 
 export function FinishOverlay() {
   return (
     <RunOverlay>
       <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: motionTiming.fast, ease: motionEase }}
-        className="flex items-center gap-3"
+        initial={{ opacity: 0, scale: 0.6, rotate: -12 }}
+        animate={{ opacity: 1, scale: 1, rotate: 0 }}
+        transition={springPlop}
+        className="flex items-center gap-4 rounded-full bg-accent px-7 py-4 text-accent-foreground"
       >
-        <Check className="h-6 w-6 text-accent sm:h-7 sm:w-7" />
-        <span className="font-display text-3xl uppercase tracking-[-0.03em] sm:text-5xl">
+        <Check className="h-6 w-6 sm:h-7 sm:w-7" />
+        <span className="font-display text-3xl font-extrabold tracking-[-0.03em] sm:text-5xl">
           Finished
         </span>
       </motion.div>

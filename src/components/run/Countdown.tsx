@@ -39,13 +39,13 @@ export function Countdown({ onComplete }: { onComplete: () => void }) {
       exit={{ opacity: 0 }}
       transition={{ duration: motionTiming.fast, ease: motionEase }}
     >
-      <Text as="p" variant="eyebrow" className="text-muted-foreground">
+      <Text as="p" variant="hand">
         Lock in.
       </Text>
 
       <div
         aria-live="assertive"
-        className="flex h-[1.1em] items-center justify-center font-display uppercase tracking-[-0.05em] text-[clamp(5rem,26vw,14rem)] leading-none"
+        className="flex h-[1.1em] items-center justify-center font-display text-[clamp(5rem,26vw,14rem)] font-extrabold leading-none tracking-[-0.05em]"
       >
         <AnimatePresence mode="wait" initial={false}>
           <motion.span
@@ -61,9 +61,9 @@ export function Countdown({ onComplete }: { onComplete: () => void }) {
         </AnimatePresence>
       </div>
 
-      <div className="h-px w-40 overflow-hidden bg-border">
+      <div className="h-2 w-40 overflow-hidden rounded-full bg-border/60">
         <motion.div
-          className="h-px origin-left bg-foreground"
+          className="h-2 origin-left rounded-full bg-accent"
           initial={{ scaleX: 0 }}
           animate={{ scaleX: 1 }}
           transition={{ duration: (STEP_MS * steps.length) / 1000, ease: 'linear' }}

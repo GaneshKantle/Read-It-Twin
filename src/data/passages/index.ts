@@ -16,6 +16,14 @@ export const passages: Passage[] = [
   ...expertPassages,
 ].map(withWordCount);
 
+/** First sentence of the opening paragraph, used as a teaser on the landing page. */
+export function passageHook(passage: Passage): string {
+  const opening = passage.paragraphs[0] ?? '';
+  const [sentence] = opening.split(/(?<=[.!?])\s/);
+
+  return sentence ?? opening;
+}
+
 function matches(passage: Passage, difficulty: Difficulty, category: CategoryFilter) {
   return (
     passage.difficulty === difficulty && (category === 'random' || passage.category === category)

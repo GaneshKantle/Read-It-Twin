@@ -5,7 +5,7 @@ export function Badge({ className, ...props }: ComponentPropsWithoutRef<'span'>)
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full border border-border bg-surface px-3 py-1 text-label uppercase tracking-[0.16em] text-muted-foreground',
+        'inline-flex items-center rounded-full bg-chip px-3.5 py-1.5 text-label font-bold text-chip-foreground',
         className,
       )}
       {...props}
