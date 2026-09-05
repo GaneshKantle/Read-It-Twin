@@ -6,11 +6,11 @@ import { OptionChip } from '@/components/run/OptionChip';
 import { RunTopBar } from '@/components/run/RunTopBar';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
-import { getPoolEstimate } from '@/data/passages';
 import { categoryOptions, difficultyOptions } from '@/data/runOptions';
 import { useRun } from '@/hooks/useRun';
 import { formatMinutes } from '@/lib/reading';
 import { fadeUp, motionEase, motionTiming, staggerContainer } from '@/lib/motion';
+import { getPoolEstimate } from '@/lib/services/passageRepository';
 
 const statTones = ['bg-pale-yellow', 'bg-soft-pink', 'bg-soft-orange'];
 
@@ -38,15 +38,19 @@ function LiveStat({ label, value, tone }: { label: string; value: string; tone: 
 
 export function SetupPage() {
   const navigate = useNavigate();
-  const { config, setDifficulty, setCategory, startRun } = useRun();
+  const { config, setDifficulty, setCategory, startRun, loading } = useRun();
 
   const estimate = useMemo(
     () => getPoolEstimate(config.difficulty, config.category),
     [config.category, config.difficulty],
   );
 
-  const handleStart = () => {
-    startRun();
+  const handleStart = async () => {
+    if (loading) {
+      return;
+    }
+
+    await startRun();
     navigate('/play/read');
   };
 
@@ -149,7 +153,13 @@ export function SetupPage() {
               <Text as="p" variant="hand">
                 The timer starts when the countdown ends
               </Text>
-              <Button size="lg" arrow className="w-full sm:w-auto" onClick={handleStart}>
+              <Button
+                size="lg"
+                arrow
+                className="w-full sm:w-auto"
+                disabled={loading}
+                onClick={() => void handleStart()}
+              >
                 Run it
               </Button>
             </motion.div>

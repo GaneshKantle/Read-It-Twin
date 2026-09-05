@@ -8,6 +8,7 @@ import { fadeUp } from '@/lib/motion';
 import type { PassageQuestion, QuizAnswer } from '@/types/run';
 
 interface AnswerReviewProps {
+  /** Only questions that already include answerIndex (local or post-grade). */
   questions: PassageQuestion[];
   answers: QuizAnswer[];
 }

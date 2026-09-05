@@ -5,12 +5,13 @@ import { Container } from '@/components/layout/Container';
 import { SplitChars } from '@/components/motion/SplitChars';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
-import { passageHook, passages } from '@/data/passages';
 import { categoryLabel } from '@/data/runOptions';
 import { estimateReadingMs, formatMinutes } from '@/lib/reading';
 import { springPlop } from '@/lib/motion';
+import { getCatalogPassages, passageHook } from '@/lib/services/passageRepository';
 
-const spotlight = passages.find((passage) => passage.id === 'ship-plank-self') ?? passages[9];
+const catalog = getCatalogPassages();
+const spotlight = catalog.find((passage) => passage.id === 'ship-plank-self') ?? catalog[9];
 
 export function FeaturedPassage() {
   const navigate = useNavigate();

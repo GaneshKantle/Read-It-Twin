@@ -1,9 +1,9 @@
 import { OptionRow } from '@/components/quiz/OptionRow';
 import { questionTypeLabel } from '@/data/runOptions';
-import type { PassageQuestion } from '@/types/run';
+import type { PublicPassageQuestion } from '@/types/run';
 
 interface QuestionCardProps {
-  question: PassageQuestion;
+  question: PublicPassageQuestion;
   selectedIndex: number | null;
   onSelect: (optionIndex: number) => void;
 }

@@ -63,6 +63,36 @@ export function buildGameResult(
   const totalQuestions = questions.length;
   const comprehension = calculateComprehension(correctAnswers, totalQuestions);
 
+  return assembleGameResult(run, answers, correctAnswers, totalQuestions, comprehension);
+}
+
+/** Assemble a result from server-side grading (Supabase RPC). */
+export function buildGameResultFromGrade(
+  run: RunResult,
+  grade: {
+    answers: QuizAnswer[];
+    correctAnswers: number;
+    totalQuestions: number;
+  },
+): GameResult {
+  const comprehension = calculateComprehension(grade.correctAnswers, grade.totalQuestions);
+
+  return assembleGameResult(
+    run,
+    grade.answers,
+    grade.correctAnswers,
+    grade.totalQuestions,
+    comprehension,
+  );
+}
+
+function assembleGameResult(
+  run: RunResult,
+  answers: QuizAnswer[],
+  correctAnswers: number,
+  totalQuestions: number,
+  comprehension: number,
+): GameResult {
   return {
     passageId: run.passageId,
     passageTitle: run.passageTitle,

@@ -1,13 +1,17 @@
 import { createContext, useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
-import { selectPassage } from '@/data/passages';
 import { calculateWpm } from '@/lib/reading';
 import { clearResultSnapshot, saveResultSnapshot } from '@/lib/resultSnapshot';
-import { buildGameResult } from '@/lib/scoring';
+import { buildGameResult, buildGameResultFromGrade } from '@/lib/scoring';
+import { isPassageQuestion, withAnswerIndexes } from '@/lib/services/mappers';
+import { selectPassageForRun, usesRemotePassages } from '@/lib/services/passageRepository';
+import { gradePassageAnswers } from '@/lib/services/questions';
+import { isAppError } from '@/lib/supabase/errors';
 import type {
   CategoryFilter,
   Difficulty,
   GameResult,
   Passage,
+  PassageQuestion,
   RunConfig,
   RunPhase,
   RunResult,
@@ -17,6 +21,13 @@ const defaultConfig: RunConfig = {
   difficulty: 'medium',
   category: 'random',
 };
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isRemotePassageId(id: string): boolean {
+  return UUID_RE.test(id);
+}
 
 interface RunContextValue {
   config: RunConfig;
@@ -31,9 +42,11 @@ interface RunContextValue {
   /** One entry per question, null until the reader picks an option. */
   selections: (number | null)[];
   selectAnswer: (questionIndex: number, optionIndex: number) => void;
-  submitQuiz: () => void;
+  submitQuiz: () => Promise<void>;
   gameResult: GameResult | null;
-  startRun: () => void;
+  /** True while a passage is being fetched or the quiz is being graded remotely. */
+  loading: boolean;
+  startRun: () => Promise<void>;
   beginReading: () => void;
   finishRun: () => void;
   registerFocusLoss: () => void;
@@ -51,6 +64,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
   const [result, setResult] = useState<RunResult | null>(null);
   const [selections, setSelections] = useState<(number | null)[]>([]);
   const [gameResult, setGameResult] = useState<GameResult | null>(null);
+  const [loading, setLoading] = useState(false);
 
   /** Kept so a second run in a row does not hand back the same passage. */
   const lastPassageId = useRef<string | undefined>(undefined);
@@ -64,18 +78,28 @@ export function RunProvider({ children }: { children: ReactNode }) {
     setConfig((current) => ({ ...current, category }));
   }, []);
 
-  const startRun = useCallback(() => {
-    const next = selectPassage(config.difficulty, config.category, lastPassageId.current);
-    lastPassageId.current = next.id;
-
+  const startRun = useCallback(async () => {
+    setLoading(true);
     clearResultSnapshot();
-    setPassage(next);
-    setPhase('countdown');
+    setGameResult(null);
+    setResult(null);
     setStartedPerf(null);
     setFocusLossCount(0);
-    setResult(null);
-    setSelections(new Array(next.questions.length).fill(null));
-    setGameResult(null);
+
+    try {
+      const next = await selectPassageForRun(
+        config.difficulty,
+        config.category,
+        lastPassageId.current,
+      );
+      lastPassageId.current = next.id;
+
+      setPassage(next);
+      setPhase('countdown');
+      setSelections(new Array(next.questions.length).fill(null));
+    } finally {
+      setLoading(false);
+    }
   }, [config.category, config.difficulty]);
 
   const beginReading = useCallback(() => {
@@ -115,12 +139,59 @@ export function RunProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const submitQuiz = useCallback(() => {
+  const submitQuiz = useCallback(async () => {
     if (!passage || !result) {
       return;
     }
 
-    const next = buildGameResult(result, passage.questions, selections);
+    const localQuestions = passage.questions.every(isPassageQuestion)
+      ? (passage.questions as PassageQuestion[])
+      : null;
+
+    const shouldGradeRemotely =
+      usesRemotePassages() && isRemotePassageId(passage.id) && !localQuestions;
+
+    if (shouldGradeRemotely) {
+      setLoading(true);
+      try {
+        const grade = await gradePassageAnswers(
+          passage.id,
+          passage.questions.map((question, index) => ({
+            questionId: question.id,
+            selectedIndex: selections[index] ?? null,
+          })),
+        );
+
+        const hydrated = withAnswerIndexes(passage.questions, grade.answers);
+        setPassage({ ...passage, questions: hydrated });
+
+        const next = buildGameResultFromGrade(result, {
+          answers: grade.answers.map((item) => ({
+            questionId: item.questionId,
+            selectedIndex: item.selectedIndex,
+            correct: item.correct,
+          })),
+          correctAnswers: grade.correctAnswers,
+          totalQuestions: grade.totalQuestions,
+        });
+        saveResultSnapshot(next);
+        setGameResult(next);
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error('[RunProvider] remote grade failed', isAppError(error) ? error : error);
+        }
+        throw error;
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (!localQuestions) {
+      return;
+    }
+
+    const next = buildGameResult(result, localQuestions, selections);
     saveResultSnapshot(next);
     setGameResult(next);
   }, [passage, result, selections]);
@@ -138,6 +209,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
     setResult(null);
     setSelections([]);
     setGameResult(null);
+    setLoading(false);
   }, []);
 
   const value = useMemo(
@@ -154,6 +226,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
       selectAnswer,
       submitQuiz,
       gameResult,
+      loading,
       startRun,
       beginReading,
       finishRun,
@@ -166,6 +239,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
       finishRun,
       focusLossCount,
       gameResult,
+      loading,
       passage,
       phase,
       registerFocusLoss,

@@ -39,8 +39,7 @@ export function QuizPage() {
       return;
     }
 
-    submitQuiz();
-    setStage('scoring');
+    void submitQuiz().then(() => setStage('scoring'));
   }, [index, selections, submitQuiz, total]);
 
   useEffect(() => {

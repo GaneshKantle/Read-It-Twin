@@ -30,11 +30,17 @@ export const questionTypes = [
 
 export type QuestionType = (typeof questionTypes)[number];
 
-export interface PassageQuestion {
+/** Question payload safe to show before grading (no answer key). */
+export interface PublicPassageQuestion {
   id: string;
   type: QuestionType;
   prompt: string;
   options: string[];
+}
+
+/** Full question including the answer key. Prefer public shape until after grade. */
+export interface PassageQuestion extends PublicPassageQuestion {
+  /** Present for local data and after server-side grading; omitted during a live quiz from Supabase. */
   answerIndex: number;
 }
 
@@ -45,11 +51,14 @@ export interface Passage {
   difficulty: Difficulty;
   paragraphs: string[];
   wordCount: number;
-  questions: PassageQuestion[];
+  /** Public questions during quiz; may include answerIndex after grading or on local fallback. */
+  questions: Array<PublicPassageQuestion | PassageQuestion>;
 }
 
 /** Authored passage data. `wordCount` is derived from the text, never hand-written. */
-export type PassageSeed = Omit<Passage, 'wordCount'>;
+export type PassageSeed = Omit<Passage, 'wordCount' | 'questions'> & {
+  questions: PassageQuestion[];
+};
 
 export interface RunConfig {
   difficulty: Difficulty;

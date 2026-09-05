@@ -5,12 +5,12 @@ import { useNavigate } from 'react-router-dom';
 import { Container } from '@/components/layout/Container';
 import { SplitChars } from '@/components/motion/SplitChars';
 import { Text } from '@/components/ui/Text';
-import { passageHook, passages } from '@/data/passages';
 import { categoryLabel, difficultyLabel } from '@/data/runOptions';
 import { useDragScroll } from '@/hooks/useDragScroll';
 import { useMomentumHover } from '@/hooks/useMomentumHover';
 import { cn } from '@/lib/cn';
 import { earlyViewport, fadeUp, staggerContainer } from '@/lib/motion';
+import { getCatalogPassages, passageHook } from '@/lib/services/passageRepository';
 import type { Passage } from '@/types/run';
 
 const frames = [
@@ -22,8 +22,10 @@ const frames = [
   'border-pink',
 ];
 
+const catalog = getCatalogPassages();
+
 /** One passage per difficulty band, then round again, so the row stays varied. */
-const featured = [0, 3, 6, 9, 1, 4, 7, 10].map((index) => passages[index]).filter(Boolean);
+const featured = [0, 3, 6, 9, 1, 4, 7, 10].map((index) => catalog[index]).filter(Boolean);
 
 export function PassageCarousel() {
   const trackRef = useRef<HTMLDivElement>(null);

@@ -1,6 +1,6 @@
 # Read It Twin
 
-Read It Twin is a polished multiplayer reading competition product. This repository currently contains the architecture and design-system foundation only.
+Read It Twin is a polished multiplayer reading competition product. This repository includes the design-system foundation, solo reading/quiz/results flow, and the Phase 06 Supabase database foundation.
 
 ## Stack
 
@@ -10,6 +10,7 @@ Read It Twin is a polished multiplayer reading competition product. This reposit
 - Tailwind CSS v4
 - Framer Motion
 - Lucide React
+- Supabase (PostgreSQL + Realtime foundation)
 
 ## Development
 
@@ -18,12 +19,19 @@ npm install
 npm run dev
 ```
 
-## Planned Supabase integration
+Production build:
 
-Environment variables are prepared for later use in `.env.example`:
+```bash
+npm run build
+```
+
+## Supabase
+
+Environment variables (see `.env.example`):
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 
-Supabase is not wired up yet in this phase.
-# Read-It-Twin
+Copy them into `.env.local` for local verification. When unset, the solo flow uses bundled passage seeds.
+
+Apply schema + seed and read security notes in [docs/database.md](docs/database.md).

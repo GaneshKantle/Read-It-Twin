@@ -19,7 +19,7 @@ import { buildInsights } from '@/lib/insights';
 import { applyPersonalRecords } from '@/lib/records';
 import { readResultSnapshot } from '@/lib/resultSnapshot';
 import { isValidGameResult, toPlayerResult } from '@/lib/results';
-import type { GameResult } from '@/types/run';
+import type { GameResult, PassageQuestion } from '@/types/run';
 
 function resolveResult(live: GameResult | null): GameResult | null {
   if (isValidGameResult(live)) {
@@ -49,15 +49,20 @@ export function ResultsPage() {
   }, [player, result]);
 
   const reviewQuestions =
-    passage && result && passage.id === result.passageId ? passage.questions : [];
+    passage && result && passage.id === result.passageId
+      ? passage.questions.filter(
+          (question): question is PassageQuestion =>
+            'answerIndex' in question && typeof question.answerIndex === 'number',
+        )
+      : [];
 
-  const handleRunItBack = () => {
+  const handleRunItBack = async () => {
     if (busy) {
       return;
     }
 
     setBusy(true);
-    startRun();
+    await startRun();
     navigate('/play/read');
   };
 
@@ -108,7 +113,7 @@ export function ResultsPage() {
 
             <ResultActions
               busy={busy}
-              onRunItBack={handleRunItBack}
+              onRunItBack={() => void handleRunItBack()}
               onNewRun={handleNewRun}
             />
 
