@@ -26,7 +26,7 @@ const questions = [
   {
     question: 'Can I play against a friend yet?',
     answer:
-      'Not yet. Solo runs are complete today, and the scoring model is already built for two players, so head-to-head rooms are the next thing to land.',
+      'Yes — hit Challenge a friend, create a room, and send the invite link. Lobby, ready checks, and match start are live; the synchronized reading race lands next.',
   },
 ];
 

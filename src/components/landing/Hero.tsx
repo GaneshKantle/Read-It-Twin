@@ -105,8 +105,7 @@ export function Hero() {
                 size="lg"
                 variant="ghost"
                 className="w-full border-ink text-ink hover:bg-ink/10 sm:w-auto"
-                onClick={() => navigate('/play')}
-                title="Multiplayer is coming next"
+                onClick={() => navigate('/challenge')}
               >
                 Challenge a friend
               </Button>

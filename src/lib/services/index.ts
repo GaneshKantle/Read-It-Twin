@@ -5,3 +5,4 @@ export * from '@/lib/services/players';
 export * from '@/lib/services/matches';
 export * from '@/lib/services/results';
 export * from '@/lib/services/passageRepository';
+export * from '@/lib/services/realtime';

@@ -1,26 +1,12 @@
 import { getSupabaseClient } from '@/lib/supabase/client';
 import { AppError, fromSupabaseError } from '@/lib/supabase/errors';
-import type { PlayerRow } from '@/types/database';
-
-export async function createPlayer(roomId: string, nickname: string): Promise<PlayerRow> {
-  const trimmed = nickname.trim();
-  if (!trimmed) {
-    throw new AppError('INSERT_FAILED', { message: 'Nickname is required' });
-  }
-
-  const client = getSupabaseClient();
-  const { data, error } = await client
-    .from('players')
-    .insert({ room_id: roomId, nickname: trimmed })
-    .select('*')
-    .single();
-
-  if (error) {
-    throw fromSupabaseError(error, 'INSERT_FAILED');
-  }
-
-  return data;
-}
+import {
+  asRecordPayload,
+  parseJoinResult,
+  parsePlayerRow,
+  parseRoomRow,
+} from '@/lib/services/rooms';
+import type { LeaveRoomResult, PlayerRow, RoomJoinResult, SetReadyResult } from '@/types/database';
 
 export async function getPlayersForRoom(roomId: string): Promise<PlayerRow[]> {
   const client = getSupabaseClient();
@@ -37,26 +23,85 @@ export async function getPlayersForRoom(roomId: string): Promise<PlayerRow[]> {
   return data ?? [];
 }
 
-export async function updatePlayerReadyState(
-  playerId: string,
-  ready: boolean,
-): Promise<PlayerRow> {
+export async function joinRoom(
+  roomCode: string,
+  nickname: string,
+  clientId: string,
+): Promise<RoomJoinResult> {
   const client = getSupabaseClient();
-  const { data, error } = await client
-    .from('players')
-    .update({ ready })
-    .eq('id', playerId)
-    .select('*')
-    .maybeSingle();
+  const { data, error } = await client.rpc('join_room', {
+    p_room_code: roomCode.toUpperCase(),
+    p_nickname: nickname,
+    p_client_id: clientId,
+  });
+
+  if (error) {
+    throw fromSupabaseError(error, 'INSERT_FAILED');
+  }
+
+  return parseJoinResult(data);
+}
+
+export async function setPlayerReady(
+  playerId: string,
+  sessionToken: string,
+  ready: boolean,
+): Promise<SetReadyResult> {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc('set_player_ready', {
+    p_player_id: playerId,
+    p_session_token: sessionToken,
+    p_ready: ready,
+  });
 
   if (error) {
     throw fromSupabaseError(error, 'UPDATE_FAILED');
   }
-  if (!data) {
-    throw new AppError('UPDATE_FAILED', { message: `Player ${playerId} not found` });
+
+  const payload = asRecordPayload(data);
+  if (!payload) {
+    throw new AppError('UPDATE_FAILED', { message: 'set_player_ready returned no payload' });
   }
 
-  return data;
+  return {
+    room: parseRoomRow(payload.room),
+    player: parsePlayerRow(payload.player),
+  };
+}
+
+export async function leaveRoom(
+  playerId: string,
+  sessionToken: string,
+): Promise<LeaveRoomResult> {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc('leave_room', {
+    p_player_id: playerId,
+    p_session_token: sessionToken,
+  });
+
+  if (error) {
+    throw fromSupabaseError(error, 'UPDATE_FAILED');
+  }
+
+  const payload = asRecordPayload(data);
+  if (!payload) {
+    throw new AppError('UPDATE_FAILED', { message: 'leave_room returned no payload' });
+  }
+
+  return {
+    room: parseRoomRow(payload.room),
+    closed: Boolean(payload.closed),
+    host_left: Boolean(payload.host_left),
+  };
+}
+
+/** @deprecated Prefer joinRoom / createRoomAndJoin RPCs for lobby. */
+export async function createPlayer(roomId: string, nickname: string): Promise<PlayerRow> {
+  void roomId;
+  void nickname;
+  throw new AppError('INSERT_FAILED', {
+    message: 'Direct player inserts are disabled; use create_room_and_join or join_room',
+  });
 }
 
 export interface PlayerResultPatch {
@@ -69,33 +114,32 @@ export interface PlayerResultPatch {
   final_score?: number;
 }
 
+/** Direct result writes remain for later phases once result RPCs exist. */
 export async function updatePlayerResult(
   playerId: string,
   patch: PlayerResultPatch,
 ): Promise<PlayerRow> {
-  const client = getSupabaseClient();
-  const { data, error } = await client
-    .from('players')
-    .update(patch)
-    .eq('id', playerId)
-    .select('*')
-    .maybeSingle();
+  void playerId;
+  void patch;
+  throw new AppError('UPDATE_FAILED', {
+    message: 'Direct player result updates are disabled until Phase 08+ RPCs',
+  });
+}
 
-  if (error) {
-    throw fromSupabaseError(error, 'UPDATE_FAILED');
-  }
-  if (!data) {
-    throw new AppError('UPDATE_FAILED', { message: `Player ${playerId} not found` });
-  }
-
-  return data;
+export async function updatePlayerReadyState(
+  playerId: string,
+  ready: boolean,
+): Promise<PlayerRow> {
+  void playerId;
+  void ready;
+  throw new AppError('UPDATE_FAILED', {
+    message: 'Direct ready updates are disabled; use set_player_ready with a session token',
+  });
 }
 
 export async function removePlayer(playerId: string): Promise<void> {
-  const client = getSupabaseClient();
-  const { error } = await client.from('players').delete().eq('id', playerId);
-
-  if (error) {
-    throw fromSupabaseError(error, 'UPDATE_FAILED');
-  }
+  void playerId;
+  throw new AppError('UPDATE_FAILED', {
+    message: 'Direct player deletes are disabled; use leave_room with a session token',
+  });
 }

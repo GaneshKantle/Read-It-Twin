@@ -41,6 +41,7 @@ export type RoomRow = {
   room_code: string;
   status: RoomStatus;
   passage_id: string | null;
+  host_player_id: string | null;
   created_at: string;
   expires_at: string;
 };
@@ -58,6 +59,15 @@ export type PlayerRow = {
   total_questions: number | null;
   comprehension: number | null;
   final_score: number | null;
+};
+
+export type PlayerSessionRow = {
+  id: string;
+  player_id: string;
+  room_id: string;
+  client_id: string;
+  session_token: string;
+  created_at: string;
 };
 
 export type MatchRow = {
@@ -91,6 +101,29 @@ export type GradePassageResult = {
   answers: GradeAnswerItem[];
   correctAnswers: number;
   totalQuestions: number;
+};
+
+/** Payload returned by create_room_and_join / join_room RPCs. */
+export type RoomJoinResult = {
+  room: RoomRow;
+  player: PlayerRow;
+  session_token: string;
+};
+
+export type SetReadyResult = {
+  room: RoomRow;
+  player: PlayerRow;
+};
+
+export type StartMatchResult = {
+  room: RoomRow;
+  match: MatchRow | null;
+};
+
+export type LeaveRoomResult = {
+  room: RoomRow;
+  closed: boolean;
+  host_left: boolean;
 };
 
 export type Json =
@@ -163,6 +196,7 @@ export type Database = {
           room_code: string;
           status?: RoomStatus;
           passage_id?: string | null;
+          host_player_id?: string | null;
           created_at?: string;
           expires_at?: string;
         };
@@ -171,6 +205,7 @@ export type Database = {
           room_code?: string;
           status?: RoomStatus;
           passage_id?: string | null;
+          host_player_id?: string | null;
           created_at?: string;
           expires_at?: string;
         };
@@ -180,6 +215,13 @@ export type Database = {
             columns: ['passage_id'];
             isOneToOne: false;
             referencedRelation: 'passages';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'rooms_host_player_id_fkey';
+            columns: ['host_player_id'];
+            isOneToOne: false;
+            referencedRelation: 'players';
             referencedColumns: ['id'];
           },
         ];
@@ -217,6 +259,41 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: 'players_room_id_fkey';
+            columns: ['room_id'];
+            isOneToOne: false;
+            referencedRelation: 'rooms';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      player_sessions: {
+        Row: PlayerSessionRow;
+        Insert: {
+          id?: string;
+          player_id: string;
+          room_id: string;
+          client_id: string;
+          session_token?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          player_id?: string;
+          room_id?: string;
+          client_id?: string;
+          session_token?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'player_sessions_player_id_fkey';
+            columns: ['player_id'];
+            isOneToOne: true;
+            referencedRelation: 'players';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'player_sessions_room_id_fkey';
             columns: ['room_id'];
             isOneToOne: false;
             referencedRelation: 'rooms';
@@ -330,6 +407,50 @@ export type Database = {
       create_room_with_code: {
         Args: {
           p_passage_id?: string | null;
+        };
+        Returns: RoomRow;
+      };
+      create_room_and_join: {
+        Args: {
+          p_nickname: string;
+          p_client_id: string;
+        };
+        Returns: Json;
+      };
+      join_room: {
+        Args: {
+          p_room_code: string;
+          p_nickname: string;
+          p_client_id: string;
+        };
+        Returns: Json;
+      };
+      set_player_ready: {
+        Args: {
+          p_player_id: string;
+          p_session_token: string;
+          p_ready: boolean;
+        };
+        Returns: Json;
+      };
+      start_match: {
+        Args: {
+          p_room_id: string;
+          p_player_id: string;
+          p_session_token: string;
+        };
+        Returns: Json;
+      };
+      leave_room: {
+        Args: {
+          p_player_id: string;
+          p_session_token: string;
+        };
+        Returns: Json;
+      };
+      get_room_by_code: {
+        Args: {
+          p_room_code: string;
         };
         Returns: RoomRow;
       };

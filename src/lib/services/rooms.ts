@@ -1,26 +1,82 @@
 import { getSupabaseClient } from '@/lib/supabase/client';
-import { AppError, fromSupabaseError } from '@/lib/supabase/errors';
-import type { RoomRow } from '@/types/database';
-import type { RoomStatus } from '@/types/room';
+import { AppError, fromSupabaseError, isAppError } from '@/lib/supabase/errors';
+import type { PlayerRow, RoomJoinResult, RoomRow } from '@/types/database';
 
-function mapRoomError(error: { code?: string; message?: string }): AppError {
-  const message = (error.message ?? '').toLowerCase();
-  if (message.includes('expired')) {
-    return new AppError('EXPIRED_ROOM', { cause: error });
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
   }
-  if (message.includes('not found') || error.code === 'P0002') {
-    return new AppError('INVALID_ROOM', { cause: error });
-  }
-  return fromSupabaseError(error, 'INVALID_ROOM');
+  return value as Record<string, unknown>;
 }
 
-function assertNotExpired(room: RoomRow): RoomRow {
-  if (room.status === 'closed' || new Date(room.expires_at).getTime() <= Date.now()) {
-    throw new AppError('EXPIRED_ROOM', { message: `Room ${room.room_code} is expired or closed` });
+export function parseRoomRow(value: unknown): RoomRow {
+  const row = asRecord(value);
+  if (!row || typeof row.id !== 'string' || typeof row.room_code !== 'string') {
+    throw new AppError('INVALID_ROOM', { message: 'Malformed room payload' });
   }
-  return room;
+  return row as unknown as RoomRow;
 }
 
+export function parsePlayerRow(value: unknown): PlayerRow {
+  const row = asRecord(value);
+  if (!row || typeof row.id !== 'string' || typeof row.nickname !== 'string') {
+    throw new AppError('INSERT_FAILED', { message: 'Malformed player payload' });
+  }
+  return row as unknown as PlayerRow;
+}
+
+export function parseJoinResult(data: unknown): RoomJoinResult {
+  const payload = asRecord(data);
+  if (!payload) {
+    throw new AppError('INSERT_FAILED', { message: 'Join RPC returned no payload' });
+  }
+  const token = payload.session_token;
+  if (typeof token !== 'string') {
+    throw new AppError('INVALID_SESSION', { message: 'Join RPC missing session token' });
+  }
+  return {
+    room: parseRoomRow(payload.room),
+    player: parsePlayerRow(payload.player),
+    session_token: token,
+  };
+}
+
+export function asRecordPayload(value: unknown): Record<string, unknown> | null {
+  return asRecord(value);
+}
+
+function isRoomExpiredOrClosed(room: RoomRow): boolean {
+  return room.status === 'closed' || new Date(room.expires_at).getTime() <= Date.now();
+}
+
+export function classifyRoomState(room: RoomRow): 'ok' | 'expired' | 'closed' {
+  if (new Date(room.expires_at).getTime() <= Date.now()) {
+    return 'expired';
+  }
+  if (room.status === 'closed') {
+    return 'closed';
+  }
+  return 'ok';
+}
+
+export async function createRoomAndJoin(
+  nickname: string,
+  clientId: string,
+): Promise<RoomJoinResult> {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc('create_room_and_join', {
+    p_nickname: nickname,
+    p_client_id: clientId,
+  });
+
+  if (error) {
+    throw fromSupabaseError(error, 'INSERT_FAILED');
+  }
+
+  return parseJoinResult(data);
+}
+
+/** Legacy helper — prefer createRoomAndJoin for lobbies. */
 export async function createRoom(passageId?: string | null): Promise<RoomRow> {
   const client = getSupabaseClient();
   const { data, error } = await client.rpc('create_room_with_code', {
@@ -39,20 +95,36 @@ export async function createRoom(passageId?: string | null): Promise<RoomRow> {
 
 export async function getRoomByCode(roomCode: string): Promise<RoomRow> {
   const client = getSupabaseClient();
-  const { data, error } = await client
-    .from('rooms')
-    .select('*')
-    .eq('room_code', roomCode.toUpperCase())
-    .maybeSingle();
+  const { data, error } = await client.rpc('get_room_by_code', {
+    p_room_code: roomCode.toUpperCase(),
+  });
 
   if (error) {
-    throw mapRoomError(error);
+    throw fromSupabaseError(error, 'INVALID_ROOM');
   }
   if (!data) {
     throw new AppError('INVALID_ROOM');
   }
 
-  return assertNotExpired(data);
+  return data as RoomRow;
+}
+
+/**
+ * Lookup that never throws for missing rooms — used by the join gate.
+ * Throws only on network/config failures.
+ */
+export async function lookupRoomByCode(
+  roomCode: string,
+): Promise<{ room: RoomRow; state: 'ok' | 'expired' | 'closed' } | { room: null; state: 'missing' }> {
+  try {
+    const room = await getRoomByCode(roomCode);
+    return { room, state: classifyRoomState(room) };
+  } catch (error) {
+    if (isAppError(error) && (error.code === 'INVALID_ROOM' || error.code === 'EXPIRED_ROOM')) {
+      return { room: null, state: 'missing' };
+    }
+    throw error;
+  }
 }
 
 export async function getRoomById(roomId: string): Promise<RoomRow> {
@@ -60,38 +132,14 @@ export async function getRoomById(roomId: string): Promise<RoomRow> {
   const { data, error } = await client.from('rooms').select('*').eq('id', roomId).maybeSingle();
 
   if (error) {
-    throw mapRoomError(error);
+    throw fromSupabaseError(error, 'INVALID_ROOM');
   }
   if (!data) {
     throw new AppError('INVALID_ROOM');
   }
 
-  return assertNotExpired(data);
-}
-
-export async function updateRoomStatus(
-  roomId: string,
-  status: RoomStatus,
-  passageId?: string | null,
-): Promise<RoomRow> {
-  const client = getSupabaseClient();
-  const patch: { status: RoomStatus; passage_id?: string | null } = { status };
-  if (passageId !== undefined) {
-    patch.passage_id = passageId;
-  }
-
-  const { data, error } = await client
-    .from('rooms')
-    .update(patch)
-    .eq('id', roomId)
-    .select('*')
-    .maybeSingle();
-
-  if (error) {
-    throw fromSupabaseError(error, 'UPDATE_FAILED');
-  }
-  if (!data) {
-    throw new AppError('INVALID_ROOM');
+  if (isRoomExpiredOrClosed(data)) {
+    throw new AppError('EXPIRED_ROOM', { message: `Room ${data.room_code} is expired or closed` });
   }
 
   return data;
@@ -102,7 +150,7 @@ export async function expireRoom(roomId: string): Promise<RoomRow> {
   const { data, error } = await client.rpc('expire_room', { p_room_id: roomId });
 
   if (error) {
-    throw mapRoomError(error);
+    throw fromSupabaseError(error, 'INVALID_ROOM');
   }
   if (!data) {
     throw new AppError('INVALID_ROOM');
