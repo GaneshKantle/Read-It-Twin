@@ -12,6 +12,11 @@ export type AppErrorCode =
   | 'INVALID_NICKNAME'
   | 'DUPLICATE_ROOM_CODE'
   | 'MISSING_PASSAGE'
+  | 'MATCH_NOT_FOUND'
+  | 'MATCH_NOT_ACTIVE'
+  | 'RACE_NOT_STARTED'
+  | 'FINISH_TOO_EARLY'
+  | 'MATCH_NOT_IN_QUIZ'
   | 'DATABASE_TIMEOUT'
   | 'INSERT_FAILED'
   | 'UPDATE_FAILED'
@@ -29,6 +34,11 @@ const USER_MESSAGES: Record<AppErrorCode, string> = {
   INVALID_NICKNAME: 'Enter a nickname between 1 and 24 characters.',
   DUPLICATE_ROOM_CODE: 'That room code is already in use. Try creating the room again.',
   MISSING_PASSAGE: 'No passage was found for this run. Pick a different setup and try again.',
+  MATCH_NOT_FOUND: 'This match could not be found. Return to the lobby and try again.',
+  MATCH_NOT_ACTIVE: 'This match is not active anymore.',
+  RACE_NOT_STARTED: 'The race has not started yet. Wait for the countdown.',
+  FINISH_TOO_EARLY: 'Finish after you have actually read the passage.',
+  MATCH_NOT_IN_QUIZ: 'The quiz is not open yet. Wait for both players to finish reading.',
   DATABASE_TIMEOUT: 'The request took too long. Check your connection and try again.',
   INSERT_FAILED: 'Could not save that change. Please try again.',
   UPDATE_FAILED: 'Could not update that record. Please try again.',
@@ -66,6 +76,12 @@ export function fromSupabaseError(
     return new AppError('EXPIRED_ROOM', { cause: error });
   }
   if (code === 'P0002' || lower.includes('not found')) {
+    if (lower.includes('match')) {
+      return new AppError('MATCH_NOT_FOUND', { cause: error });
+    }
+    if (lower.includes('passage')) {
+      return new AppError('MISSING_PASSAGE', { cause: error });
+    }
     return new AppError(fallback === 'UNKNOWN' ? 'INVALID_ROOM' : fallback, { cause: error });
   }
   if (code === 'P0003' || lower.includes('room full') || lower.includes('full')) {
@@ -85,6 +101,21 @@ export function fromSupabaseError(
   }
   if (code === 'P0008' || lower.includes('not ready')) {
     return new AppError('PLAYERS_NOT_READY', { cause: error });
+  }
+  if (code === 'P0009' || lower.includes('match not found')) {
+    return new AppError('MATCH_NOT_FOUND', { cause: error });
+  }
+  if (code === 'P0010' || lower.includes('match not active')) {
+    return new AppError('MATCH_NOT_ACTIVE', { cause: error });
+  }
+  if (code === 'P0011' || lower.includes('race not started')) {
+    return new AppError('RACE_NOT_STARTED', { cause: error });
+  }
+  if (code === 'P0012' || lower.includes('finish too early')) {
+    return new AppError('FINISH_TOO_EARLY', { cause: error });
+  }
+  if (code === 'P0013' || lower.includes('not in quiz')) {
+    return new AppError('MATCH_NOT_IN_QUIZ', { cause: error });
   }
 
   if (code === '23505' || lower.includes('duplicate')) {

@@ -1,14 +1,16 @@
 import { getSupabaseClient } from '@/lib/supabase/client';
-import type { PlayerRow, RoomRow } from '@/types/database';
+import type { MatchRow, PlayerRow, RoomRow } from '@/types/database';
 
 export type RoomRealtimeCallbacks = {
   onRoomChange?: (room: RoomRow) => void;
   onPlayersChange?: () => void;
+  onMatchChange?: (match: MatchRow) => void;
+  onSubscribed?: () => void;
   onError?: (error: Error) => void;
 };
 
 /**
- * Subscribe to room + player changes for one room.
+ * Subscribe to room + player + match changes for one room.
  * Returns an unsubscribe function. Call once per mount; clean up on unmount.
  */
 export function subscribeToRoom(roomId: string, callbacks: RoomRealtimeCallbacks): () => void {
@@ -45,7 +47,26 @@ export function subscribeToRoom(roomId: string, callbacks: RoomRealtimeCallbacks
         callbacks.onPlayersChange?.();
       },
     )
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'matches',
+        filter: `room_id=eq.${roomId}`,
+      },
+      (payload) => {
+        if (payload.new && typeof payload.new === 'object' && 'id' in payload.new) {
+          callbacks.onMatchChange?.(payload.new as MatchRow);
+        } else {
+          callbacks.onPlayersChange?.();
+        }
+      },
+    )
     .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        callbacks.onSubscribed?.();
+      }
       if (status === 'CHANNEL_ERROR') {
         callbacks.onError?.(new Error('Realtime channel error'));
       }
@@ -56,4 +77,4 @@ export function subscribeToRoom(roomId: string, callbacks: RoomRealtimeCallbacks
   };
 }
 
-export type { PlayerRow, RoomRow };
+export type { MatchRow, PlayerRow, RoomRow };

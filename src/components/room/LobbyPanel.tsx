@@ -40,7 +40,7 @@ export function LobbyPanel({
   canToggleReady,
   canStart,
   matchStarted,
-  match,
+  match: _match,
   leftOpponentName,
   pending,
   actionError,
@@ -53,7 +53,7 @@ export function LobbyPanel({
   const selfReady = selfPlayer?.ready ?? false;
 
   const statusCopy = matchStarted
-    ? 'Both ready. Match created. Countdown comes next.'
+    ? 'Both ready. Starting the race…'
     : lobbyStatusMessage(bothReady, isHost, waitingName, opponent);
 
   return (
@@ -129,11 +129,6 @@ export function LobbyPanel({
         <Text as="p" variant="subheading">
           {statusCopy}
         </Text>
-        {matchStarted && match ? (
-          <Text as="p" variant="small" className="mt-2 text-muted-foreground">
-            Match ready. Phase 08 will start the synchronized countdown.
-          </Text>
-        ) : null}
       </motion.div>
 
       {actionError ? (

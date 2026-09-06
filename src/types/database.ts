@@ -1,3 +1,4 @@
+import type { MatchStatus } from '@/types/match';
 import type { Category, Difficulty, QuestionType } from '@/types/run';
 import type { RoomStatus } from '@/types/room';
 
@@ -53,6 +54,7 @@ export type PlayerRow = {
   ready: boolean;
   joined_at: string;
   finished: boolean;
+  finished_at: string | null;
   reading_time: number | null;
   wpm: number | null;
   correct_answers: number | null;
@@ -75,6 +77,8 @@ export type MatchRow = {
   room_id: string;
   passage_id: string | null;
   started_at: string;
+  race_start_at: string | null;
+  status: MatchStatus;
   completed_at: string | null;
 };
 
@@ -88,6 +92,7 @@ export type ResultRow = {
   total_questions: number;
   comprehension: number;
   final_score: number;
+  submitted_at: string;
 };
 
 export type GradeAnswerItem = {
@@ -118,6 +123,29 @@ export type SetReadyResult = {
 export type StartMatchResult = {
   room: RoomRow;
   match: MatchRow | null;
+  server_now: string;
+};
+
+export type AckRaceStartResult = {
+  room: RoomRow;
+  match: MatchRow | null;
+  server_now: string;
+};
+
+export type FinishReadingResult = {
+  room: RoomRow;
+  match: MatchRow | null;
+  player: PlayerRow;
+  server_now: string;
+};
+
+export type SubmitMatchQuizResult = {
+  room: RoomRow;
+  match: MatchRow | null;
+  player: PlayerRow;
+  result: ResultRow;
+  grade: GradePassageResult | null;
+  server_now: string;
 };
 
 export type LeaveRoomResult = {
@@ -235,6 +263,7 @@ export type Database = {
           ready?: boolean;
           joined_at?: string;
           finished?: boolean;
+          finished_at?: string | null;
           reading_time?: number | null;
           wpm?: number | null;
           correct_answers?: number | null;
@@ -249,6 +278,7 @@ export type Database = {
           ready?: boolean;
           joined_at?: string;
           finished?: boolean;
+          finished_at?: string | null;
           reading_time?: number | null;
           wpm?: number | null;
           correct_answers?: number | null;
@@ -308,6 +338,8 @@ export type Database = {
           room_id: string;
           passage_id?: string | null;
           started_at?: string;
+          race_start_at?: string | null;
+          status?: MatchStatus;
           completed_at?: string | null;
         };
         Update: {
@@ -315,6 +347,8 @@ export type Database = {
           room_id?: string;
           passage_id?: string | null;
           started_at?: string;
+          race_start_at?: string | null;
+          status?: MatchStatus;
           completed_at?: string | null;
         };
         Relationships: [
@@ -346,6 +380,7 @@ export type Database = {
           total_questions: number;
           comprehension: number;
           final_score: number;
+          submitted_at?: string;
         };
         Update: {
           id?: string;
@@ -357,6 +392,7 @@ export type Database = {
           total_questions?: number;
           comprehension?: number;
           final_score?: number;
+          submitted_at?: string;
         };
         Relationships: [
           {
@@ -441,6 +477,35 @@ export type Database = {
         };
         Returns: Json;
       };
+      get_server_time: {
+        Args: Record<PropertyKey, never>;
+        Returns: string;
+      };
+      ack_race_start: {
+        Args: {
+          p_room_id: string;
+          p_player_id: string;
+          p_session_token: string;
+        };
+        Returns: Json;
+      };
+      finish_reading: {
+        Args: {
+          p_match_id: string;
+          p_player_id: string;
+          p_session_token: string;
+        };
+        Returns: Json;
+      };
+      submit_match_quiz: {
+        Args: {
+          p_match_id: string;
+          p_player_id: string;
+          p_session_token: string;
+          p_answers: Json;
+        };
+        Returns: Json;
+      };
       leave_room: {
         Args: {
           p_player_id: string;
@@ -469,6 +534,7 @@ export type Database = {
       difficulty: Difficulty;
       category: Category;
       room_status: RoomStatus;
+      match_status: MatchStatus;
       question_type: QuestionType;
     };
     CompositeTypes: {

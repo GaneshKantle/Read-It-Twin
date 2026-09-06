@@ -1,6 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { isSupabaseConfigured } from '@/lib/supabase/client';
-import { AppError, isAppError } from '@/lib/supabase/errors';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { getClockOffsetMs } from '@/lib/clockSync';
+import { matchDebug } from '@/lib/debug/matchDebug';
+import { resolveMatchView } from '@/lib/matchView';
+import {
+  ackRaceStart,
+  finishReading,
+  getLatestMatchForRoom,
+  getServerTime,
+  startMatch,
+  submitMatchQuiz,
+} from '@/lib/services/matches';
+import { getPassageById } from '@/lib/services/passages';
+import { getPlayersForRoom, joinRoom, leaveRoom, setPlayerReady } from '@/lib/services/players';
+import { subscribeToRoom } from '@/lib/services/realtime';
+import { getMatchResults, getPlayerResultForMatch } from '@/lib/services/results';
+import { classifyRoomState, lookupRoomByCode } from '@/lib/services/rooms';
 import {
   clearRoomSession,
   getOrCreateClientId,
@@ -8,17 +22,18 @@ import {
   writeRoomSession,
   type RoomSession,
 } from '@/lib/session/playerSession';
-import { getLatestMatchForRoom, startMatch } from '@/lib/services/matches';
-import { getPlayersForRoom, joinRoom, leaveRoom, setPlayerReady } from '@/lib/services/players';
-import { subscribeToRoom } from '@/lib/services/realtime';
-import { classifyRoomState, lookupRoomByCode } from '@/lib/services/rooms';
-import type { MatchRow, PlayerRow, RoomRow } from '@/types/database';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
+import { AppError, isAppError } from '@/lib/supabase/errors';
+import type { MatchRow, PlayerRow, ResultRow, RoomRow } from '@/types/database';
+import type { MatchView } from '@/types/match';
+import type { Passage } from '@/types/run';
 
 export type LobbyPhase =
   | 'loading'
   | 'unavailable'
   | 'join'
   | 'lobby'
+  | 'racing'
   | 'error';
 
 export type LobbyErrorKind =
@@ -36,6 +51,8 @@ export type LobbyError = {
   message: string;
   opponentName?: string;
 };
+
+const RACE_STATUSES = new Set(['countdown', 'reading', 'quiz', 'results']);
 
 function errorFromAppError(error: AppError): LobbyError {
   switch (error.code) {
@@ -85,6 +102,10 @@ function toAppError(error: unknown): AppError {
   return new AppError('UNKNOWN', { cause: error });
 }
 
+function isRaceStatus(status: string | undefined | null): boolean {
+  return Boolean(status && RACE_STATUSES.has(status));
+}
+
 export function useRoomLobby(roomCodeParam: string) {
   const roomCode = roomCodeParam.trim().toUpperCase();
 
@@ -93,6 +114,10 @@ export function useRoomLobby(roomCodeParam: string) {
   const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [session, setSession] = useState<RoomSession | null>(null);
   const [match, setMatch] = useState<MatchRow | null>(null);
+  const [passage, setPassage] = useState<Passage | null>(null);
+  const [ownResult, setOwnResult] = useState<ResultRow | null>(null);
+  const [matchResults, setMatchResults] = useState<ResultRow[]>([]);
+  const [clockOffsetMs, setClockOffsetMs] = useState(0);
   const [error, setError] = useState<LobbyError | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pending, setPending] = useState({
@@ -100,13 +125,20 @@ export function useRoomLobby(roomCodeParam: string) {
     ready: false,
     start: false,
     leave: false,
+    finish: false,
+    quiz: false,
   });
   const [leftOpponentName, setLeftOpponentName] = useState<string | null>(null);
+  const [focusLossCount, setFocusLossCount] = useState(0);
+  const [passageLoading, setPassageLoading] = useState(false);
 
   const sessionRef = useRef<RoomSession | null>(null);
   const playersRef = useRef<PlayerRow[]>([]);
   const roomRef = useRef<RoomRow | null>(null);
+  const matchRef = useRef<MatchRow | null>(null);
   const refreshingRef = useRef(false);
+  const ackSentRef = useRef<string | null>(null);
+  const passageIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     sessionRef.current = session;
@@ -119,6 +151,49 @@ export function useRoomLobby(roomCodeParam: string) {
   useEffect(() => {
     roomRef.current = room;
   }, [room]);
+
+  useEffect(() => {
+    matchRef.current = match;
+  }, [match]);
+
+  const syncClockOffset = useCallback(() => {
+    setClockOffsetMs(getClockOffsetMs());
+  }, []);
+
+  const loadPassageForMatch = useCallback(async (nextMatch: MatchRow | null) => {
+    const passageId = nextMatch?.passage_id ?? null;
+    if (!passageId) {
+      setPassage(null);
+      passageIdRef.current = null;
+      return;
+    }
+    if (passageIdRef.current === passageId) {
+      return;
+    }
+    setPassageLoading(true);
+    try {
+      const loaded = await getPassageById(passageId);
+      passageIdRef.current = passageId;
+      setPassage(loaded);
+    } catch (err) {
+      const appError = toAppError(err);
+      setActionError(appError.userMessage);
+    } finally {
+      setPassageLoading(false);
+    }
+  }, []);
+
+  const loadOwnResult = useCallback(async (matchId: string, playerId: string) => {
+    const result = await getPlayerResultForMatch(matchId, playerId);
+    setOwnResult(result);
+    return result;
+  }, []);
+
+  const loadAllResults = useCallback(async (matchId: string) => {
+    const rows = await getMatchResults(matchId);
+    setMatchResults(rows);
+    return rows;
+  }, []);
 
   const refreshPlayers = useCallback(async (roomId: string) => {
     const next = await getPlayersForRoom(roomId);
@@ -142,8 +217,12 @@ export function useRoomLobby(roomCodeParam: string) {
     setPlayers(next);
 
     const currentRoom = roomRef.current;
-    if (currentSession && currentRoom && !next.some((player) => player.id === currentSession.playerId)) {
-      // Our player row disappeared (host closed / we were removed)
+    if (
+      currentSession &&
+      currentRoom &&
+      !isRaceStatus(currentRoom.status) &&
+      !next.some((player) => player.id === currentSession.playerId)
+    ) {
       clearRoomSession();
       setSession(null);
       if (currentRoom.status === 'closed' || currentRoom.host_player_id === currentSession.playerId) {
@@ -161,6 +240,18 @@ export function useRoomLobby(roomCodeParam: string) {
       }
       setPhase('error');
     }
+
+    return next;
+  }, []);
+
+  const applyRoomPhase = useCallback((nextRoom: RoomRow) => {
+    if (isRaceStatus(nextRoom.status)) {
+      setPhase((current) => (current === 'error' ? current : 'racing'));
+    } else if (nextRoom.status === 'waiting' || nextRoom.status === 'ready') {
+      setPhase((current) =>
+        current === 'error' || current === 'join' || current === 'loading' ? current : 'lobby',
+      );
+    }
   }, []);
 
   const refreshSnapshot = useCallback(async () => {
@@ -170,6 +261,9 @@ export function useRoomLobby(roomCodeParam: string) {
     }
     refreshingRef.current = true;
     try {
+      await getServerTime().catch(() => undefined);
+      syncClockOffset();
+
       const lookup = await lookupRoomByCode(currentRoom.room_code);
       if (lookup.state === 'missing' || !lookup.room) {
         clearRoomSession();
@@ -200,23 +294,46 @@ export function useRoomLobby(roomCodeParam: string) {
         const currentSession = sessionRef.current;
         const isHost =
           currentSession && lookup.room.host_player_id === currentSession.playerId;
-        clearRoomSession();
-        setError({
-          kind: isHost ? 'closed' : 'host_left',
-          title: isHost ? 'ROOM CLOSED' : 'THE HOST LEFT',
-          message: isHost
-            ? 'This room is no longer open.'
-            : 'The host left the room, so this race was closed.',
-        });
-        setPhase('error');
-        return;
+        // Mid-race close is unusual; still surface it
+        if (!isRaceStatus(lookup.room.status)) {
+          clearRoomSession();
+          setError({
+            kind: isHost ? 'closed' : 'host_left',
+            title: isHost ? 'ROOM CLOSED' : 'THE HOST LEFT',
+            message: isHost
+              ? 'This room is no longer open.'
+              : 'The host left the room, so this race was closed.',
+          });
+          setPhase('error');
+          return;
+        }
       }
 
       await refreshPlayers(lookup.room.id);
 
-      if (lookup.room.status === 'countdown' || lookup.room.passage_id) {
+      if (isRaceStatus(lookup.room.status) || lookup.room.passage_id) {
         const latest = await getLatestMatchForRoom(lookup.room.id);
         setMatch(latest);
+        matchRef.current = latest;
+        await loadPassageForMatch(latest);
+
+        const currentSession = sessionRef.current;
+        if (latest && currentSession) {
+          const mine = await loadOwnResult(latest.id, currentSession.playerId);
+          if (lookup.room.status === 'results' || latest.status === 'results') {
+            await loadAllResults(latest.id);
+          } else if (mine) {
+            setMatchResults((prev) =>
+              prev.some((row) => row.id === mine.id) ? prev : [...prev, mine],
+            );
+          }
+        }
+
+        applyRoomPhase(lookup.room);
+      } else {
+        setMatch(null);
+        matchRef.current = null;
+        applyRoomPhase(lookup.room);
       }
     } catch (err) {
       const appError = toAppError(err);
@@ -224,7 +341,14 @@ export function useRoomLobby(roomCodeParam: string) {
     } finally {
       refreshingRef.current = false;
     }
-  }, [refreshPlayers]);
+  }, [
+    applyRoomPhase,
+    loadAllResults,
+    loadOwnResult,
+    loadPassageForMatch,
+    refreshPlayers,
+    syncClockOffset,
+  ]);
 
   // Initial load
   useEffect(() => {
@@ -256,6 +380,11 @@ export function useRoomLobby(roomCodeParam: string) {
       setActionError(null);
 
       try {
+        await getServerTime().catch(() => undefined);
+        if (!cancelled) {
+          syncClockOffset();
+        }
+
         const lookup = await lookupRoomByCode(roomCode);
         if (cancelled) {
           return;
@@ -283,7 +412,7 @@ export function useRoomLobby(roomCodeParam: string) {
           return;
         }
 
-        if (lookup.state === 'closed') {
+        if (lookup.state === 'closed' && !isRaceStatus(lookup.room.status)) {
           setError({
             kind: 'closed',
             title: 'ROOM CLOSED',
@@ -302,18 +431,49 @@ export function useRoomLobby(roomCodeParam: string) {
 
         if (existing && playerList.some((player) => player.id === existing.playerId)) {
           setSession(existing);
-          setPhase('lobby');
+
+          if (isRaceStatus(lookup.room.status)) {
+            const latest = await getLatestMatchForRoom(lookup.room.id);
+            if (!cancelled) {
+              setMatch(latest);
+              await loadPassageForMatch(latest);
+              if (latest) {
+                await loadOwnResult(latest.id, existing.playerId);
+                if (lookup.room.status === 'results') {
+                  await loadAllResults(latest.id);
+                }
+              }
+              setPhase('racing');
+            }
+            return;
+          }
+
           if (lookup.room.status === 'countdown') {
             const latest = await getLatestMatchForRoom(lookup.room.id);
             if (!cancelled) {
               setMatch(latest);
+              await loadPassageForMatch(latest);
+              setPhase('racing');
             }
+            return;
           }
+
+          setPhase('lobby');
           return;
         }
 
         if (existing) {
           clearRoomSession();
+        }
+
+        if (isRaceStatus(lookup.room.status)) {
+          setError({
+            kind: 'full',
+            title: 'RACE IN PROGRESS',
+            message: 'This race has already started. Ask the host for a new invite.',
+          });
+          setPhase('error');
+          return;
         }
 
         if (playerList.length >= 2) {
@@ -341,11 +501,11 @@ export function useRoomLobby(roomCodeParam: string) {
     return () => {
       cancelled = true;
     };
-  }, [roomCode]);
+  }, [loadAllResults, loadOwnResult, loadPassageForMatch, roomCode, syncClockOffset]);
 
-  // Realtime subscription while in lobby
+  // Realtime while in lobby or racing
   useEffect(() => {
-    if (phase !== 'lobby' || !room) {
+    if ((phase !== 'lobby' && phase !== 'racing') || !room) {
       return;
     }
 
@@ -363,7 +523,7 @@ export function useRoomLobby(roomCodeParam: string) {
           setPhase('error');
           return;
         }
-        if (nextRoom.status === 'closed') {
+        if (nextRoom.status === 'closed' && !isRaceStatus(nextRoom.status)) {
           clearRoomSession();
           setError({
             kind: 'host_left',
@@ -374,20 +534,58 @@ export function useRoomLobby(roomCodeParam: string) {
           return;
         }
         void refreshPlayers(nextRoom.id);
-        if (nextRoom.status === 'countdown') {
-          void getLatestMatchForRoom(nextRoom.id).then(setMatch);
+        if (isRaceStatus(nextRoom.status)) {
+          setPhase('racing');
+          void getLatestMatchForRoom(nextRoom.id).then(async (latest) => {
+            setMatch(latest);
+            await loadPassageForMatch(latest);
+            const currentSession = sessionRef.current;
+            if (latest && currentSession) {
+              await loadOwnResult(latest.id, currentSession.playerId);
+              if (nextRoom.status === 'results') {
+                await loadAllResults(latest.id);
+              }
+            }
+          });
+        }
+      },
+      onMatchChange: (nextMatch) => {
+        setMatch((prev) => {
+          if (prev?.id === nextMatch.id && prev.status === nextMatch.status && prev.race_start_at === nextMatch.race_start_at) {
+            return prev;
+          }
+          return nextMatch;
+        });
+        void loadPassageForMatch(nextMatch);
+        if (nextMatch.status === 'results') {
+          void loadAllResults(nextMatch.id);
+        }
+        const currentSession = sessionRef.current;
+        if (currentSession && (nextMatch.status === 'quiz' || nextMatch.status === 'results')) {
+          void loadOwnResult(nextMatch.id, currentSession.playerId);
         }
       },
       onPlayersChange: () => {
         void refreshSnapshot();
       },
+      onSubscribed: () => {
+        void refreshSnapshot();
+      },
+      onError: () => {
+        void refreshSnapshot();
+      },
     });
 
     return unsubscribe;
-  }, [phase, room?.id, refreshPlayers, refreshSnapshot]);
-
-  // Intentionally no pagehide leave: refresh must restore the same player.
-  // Room expiry + host leave close are the cleanup fallbacks.
+  }, [
+    loadAllResults,
+    loadOwnResult,
+    loadPassageForMatch,
+    phase,
+    refreshPlayers,
+    refreshSnapshot,
+    room?.id,
+  ]);
 
   const hostPlayer = players.find((player) => player.id === room?.host_player_id) ?? players[0] ?? null;
   const selfPlayer = session ? players.find((player) => player.id === session.playerId) ?? null : null;
@@ -407,7 +605,77 @@ export function useRoomLobby(roomCodeParam: string) {
     room != null &&
     (room.status === 'waiting' || room.status === 'ready') &&
     !pending.start;
-  const matchStarted = room?.status === 'countdown' || match != null;
+  const matchStarted = isRaceStatus(room?.status) || match != null;
+
+  const matchView: MatchView = useMemo(
+    () =>
+      resolveMatchView({
+        room,
+        match,
+        selfPlayer,
+        ownResult,
+        clockOffsetMs,
+      }),
+    [clockOffsetMs, match, ownResult, room, selfPlayer],
+  );
+
+  useEffect(() => {
+    matchDebug('view', {
+      roomId: room?.id,
+      matchId: match?.id,
+      playerId: session?.playerId,
+      matchState: match?.status,
+      roomState: room?.status,
+      raceStartAt: match?.race_start_at,
+      offsetMs: clockOffsetMs,
+      view: matchView,
+    });
+  }, [clockOffsetMs, match, matchView, room, session?.playerId]);
+
+  // Promote countdown → reading once race_start_at has passed
+  useEffect(() => {
+    if (phase !== 'racing' || !session || !room || !match?.race_start_at) {
+      return;
+    }
+    if (room.status !== 'countdown' && match.status !== 'countdown') {
+      return;
+    }
+
+    const key = `${match.id}:${match.race_start_at}`;
+    const remaining = Date.parse(match.race_start_at) - (Date.now() + clockOffsetMs);
+    if (remaining > 0) {
+      const timeout = window.setTimeout(() => {
+        if (ackSentRef.current === key) {
+          return;
+        }
+        ackSentRef.current = key;
+        void ackRaceStart(room.id, session.playerId, session.sessionToken)
+          .then((result) => {
+            setRoom(result.room);
+            setMatch(result.match);
+            syncClockOffset();
+          })
+          .catch(() => {
+            ackSentRef.current = null;
+          });
+      }, remaining + 20);
+      return () => window.clearTimeout(timeout);
+    }
+
+    if (ackSentRef.current === key) {
+      return;
+    }
+    ackSentRef.current = key;
+    void ackRaceStart(room.id, session.playerId, session.sessionToken)
+      .then((result) => {
+        setRoom(result.room);
+        setMatch(result.match);
+        syncClockOffset();
+      })
+      .catch(() => {
+        ackSentRef.current = null;
+      });
+  }, [clockOffsetMs, match, phase, room, session, syncClockOffset]);
 
   const handleJoin = useCallback(
     async (nickname: string) => {
@@ -433,7 +701,12 @@ export function useRoomLobby(roomCodeParam: string) {
         setPhase('lobby');
       } catch (err) {
         const appError = toAppError(err);
-        if (appError.code === 'ROOM_FULL' || appError.code === 'EXPIRED_ROOM' || appError.code === 'ROOM_CLOSED' || appError.code === 'INVALID_ROOM') {
+        if (
+          appError.code === 'ROOM_FULL' ||
+          appError.code === 'EXPIRED_ROOM' ||
+          appError.code === 'ROOM_CLOSED' ||
+          appError.code === 'INVALID_ROOM'
+        ) {
           setError(errorFromAppError(appError));
           setPhase('error');
         } else {
@@ -477,13 +750,21 @@ export function useRoomLobby(roomCodeParam: string) {
       const result = await startMatch(room.id, current.playerId, current.sessionToken);
       setRoom(result.room);
       setMatch(result.match);
+      syncClockOffset();
+      await loadPassageForMatch(result.match);
+      setOwnResult(null);
+      setMatchResults([]);
+      setFocusLossCount(0);
+      ackSentRef.current = null;
+      setPhase('racing');
+      await refreshPlayers(result.room.id);
     } catch (err) {
       const appError = toAppError(err);
       setActionError(appError.userMessage);
     } finally {
       setPending((prev) => ({ ...prev, start: false }));
     }
-  }, [canStart, room]);
+  }, [canStart, loadPassageForMatch, refreshPlayers, room, syncClockOffset]);
 
   const handleLeave = useCallback(async () => {
     const current = sessionRef.current;
@@ -492,19 +773,117 @@ export function useRoomLobby(roomCodeParam: string) {
     }
     setPending((prev) => ({ ...prev, leave: true }));
     try {
-      await leaveRoom(current.playerId, current.sessionToken);
+      const currentRoom = roomRef.current;
+      // Mid-race: keep server seat; only clear local if leaving lobby
+      if (currentRoom && isRaceStatus(currentRoom.status)) {
+        // Navigating home mid-race keeps session for refresh recovery
+      } else {
+        await leaveRoom(current.playerId, current.sessionToken);
+        clearRoomSession();
+        setSession(null);
+      }
     } catch {
-      // Still clear local session so the user can leave the UI
+      if (!isRaceStatus(roomRef.current?.status)) {
+        clearRoomSession();
+        setSession(null);
+      }
     } finally {
-      clearRoomSession();
-      setSession(null);
       setPending((prev) => ({ ...prev, leave: false }));
     }
   }, [pending.leave]);
 
+  const handleFinishReading = useCallback(async () => {
+    const current = sessionRef.current;
+    const currentMatch = matchRef.current;
+    if (!current || !currentMatch || pending.finish || selfPlayer?.finished) {
+      return;
+    }
+    setPending((prev) => ({ ...prev, finish: true }));
+    setActionError(null);
+    try {
+      const result = await finishReading(
+        currentMatch.id,
+        current.playerId,
+        current.sessionToken,
+      );
+      setRoom(result.room);
+      setMatch(result.match);
+      syncClockOffset();
+      await refreshPlayers(result.room.id);
+    } catch (err) {
+      const appError = toAppError(err);
+      setActionError(appError.userMessage);
+    } finally {
+      setPending((prev) => ({ ...prev, finish: false }));
+    }
+  }, [pending.finish, refreshPlayers, selfPlayer?.finished, syncClockOffset]);
+
+  const handleSubmitQuiz = useCallback(
+    async (answers: { questionId: string; selectedIndex: number | null }[]) => {
+      const current = sessionRef.current;
+      const currentMatch = matchRef.current;
+      if (!current || !currentMatch || pending.quiz || ownResult) {
+        return ownResult;
+      }
+      setPending((prev) => ({ ...prev, quiz: true }));
+      setActionError(null);
+      try {
+        const result = await submitMatchQuiz(
+          currentMatch.id,
+          current.playerId,
+          current.sessionToken,
+          answers,
+        );
+        setRoom(result.room);
+        setMatch(result.match);
+        setOwnResult(result.result);
+        syncClockOffset();
+        await refreshPlayers(result.room.id);
+        if (result.room.status === 'results' || result.match?.status === 'results') {
+          await loadAllResults(currentMatch.id);
+        }
+        return result.result;
+      } catch (err) {
+        const appError = toAppError(err);
+        setActionError(appError.userMessage);
+        throw appError;
+      } finally {
+        setPending((prev) => ({ ...prev, quiz: false }));
+      }
+    },
+    [loadAllResults, ownResult, pending.quiz, refreshPlayers, syncClockOffset],
+  );
+
+  const registerFocusLoss = useCallback(() => {
+    setFocusLossCount((count) => count + 1);
+  }, []);
+
   const dismissOpponentLeft = useCallback(() => {
     setLeftOpponentName(null);
   }, []);
+
+  const handleCountdownComplete = useCallback(() => {
+    const current = sessionRef.current;
+    const currentRoom = roomRef.current;
+    const currentMatch = matchRef.current;
+    if (!current || !currentRoom || !currentMatch) {
+      return;
+    }
+    const key = `${currentMatch.id}:ack`;
+    if (ackSentRef.current === key) {
+      return;
+    }
+    ackSentRef.current = key;
+    void ackRaceStart(currentRoom.id, current.playerId, current.sessionToken)
+      .then((result) => {
+        setRoom(result.room);
+        setMatch(result.match);
+        syncClockOffset();
+      })
+      .catch(() => {
+        ackSentRef.current = null;
+      });
+  }, [syncClockOffset]);
 
   return {
     roomCode,
@@ -513,6 +892,13 @@ export function useRoomLobby(roomCodeParam: string) {
     players,
     session,
     match,
+    passage,
+    passageLoading,
+    ownResult,
+    matchResults,
+    matchView,
+    clockOffsetMs,
+    focusLossCount,
     error,
     actionError,
     pending,
@@ -529,6 +915,10 @@ export function useRoomLobby(roomCodeParam: string) {
     handleToggleReady,
     handleStart,
     handleLeave,
+    handleFinishReading,
+    handleSubmitQuiz,
+    handleCountdownComplete,
+    registerFocusLoss,
     dismissOpponentLeft,
   };
 }

@@ -1,6 +1,9 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { JoinPanel } from '@/components/room/JoinPanel';
 import { LobbyPanel } from '@/components/room/LobbyPanel';
+import { MatchQuizScreen } from '@/components/room/MatchQuizScreen';
+import { MatchReadingScreen } from '@/components/room/MatchReadingScreen';
+import { MatchResultsStub } from '@/components/room/MatchResultsStub';
 import { RoomError } from '@/components/room/RoomError';
 import { Container } from '@/components/layout/Container';
 import { RunTopBar } from '@/components/run/RunTopBar';
@@ -18,11 +21,26 @@ export function RoomPage() {
     navigate('/');
   };
 
+  const racing = lobby.phase === 'racing';
+  const showReading =
+    racing &&
+    lobby.passage &&
+    lobby.match &&
+    lobby.selfPlayer &&
+    (lobby.matchView === 'countdown' ||
+      lobby.matchView === 'reading' ||
+      lobby.matchView === 'waiting');
+  const showQuiz =
+    racing &&
+    lobby.passage &&
+    (lobby.matchView === 'quiz' || lobby.matchView === 'quiz_waiting');
+  const showResults = racing && lobby.matchView === 'results';
+
   return (
     <>
       <RunTopBar backTo="/" backLabel="Home" />
-      <main className="flex-1">
-        {lobby.phase === 'loading' ? (
+      {lobby.phase === 'loading' ? (
+        <main className="flex-1">
           <Container className="py-14 sm:py-20">
             <div className="mx-auto max-w-[34rem] rounded-lg border-2 border-border bg-surface p-7 sm:p-9">
               <Text as="p" variant="subheading">
@@ -33,13 +51,15 @@ export function RoomPage() {
               </Text>
             </div>
           </Container>
-        ) : null}
+        </main>
+      ) : null}
 
-        {lobby.phase === 'unavailable' || lobby.phase === 'error' ? (
-          lobby.error ? <RoomError error={lobby.error} /> : null
-        ) : null}
+      {lobby.phase === 'unavailable' || lobby.phase === 'error' ? (
+        lobby.error ? <RoomError error={lobby.error} /> : null
+      ) : null}
 
-        {lobby.phase === 'join' && lobby.room ? (
+      {lobby.phase === 'join' && lobby.room ? (
+        <main className="flex-1">
           <Container className="py-8 sm:py-12 lg:py-16">
             <JoinPanel
               roomCode={lobby.room.room_code}
@@ -49,9 +69,11 @@ export function RoomPage() {
               onJoin={(nickname) => void lobby.handleJoin(nickname)}
             />
           </Container>
-        ) : null}
+        </main>
+      ) : null}
 
-        {lobby.phase === 'lobby' && lobby.room ? (
+      {lobby.phase === 'lobby' && lobby.room ? (
+        <main className="flex-1">
           <Container className="py-8 sm:py-12 lg:py-16">
             <LobbyPanel
               room={lobby.room}
@@ -73,8 +95,65 @@ export function RoomPage() {
               onDismissOpponentLeft={lobby.dismissOpponentLeft}
             />
           </Container>
-        ) : null}
-      </main>
+        </main>
+      ) : null}
+
+      {racing && lobby.passageLoading && !lobby.passage ? (
+        <main className="flex-1">
+          <Container className="py-14 sm:py-20">
+            <div className="mx-auto max-w-[34rem] rounded-lg border-2 border-border bg-surface p-7 sm:p-9">
+              <Text as="p" variant="subheading">
+                Loading passage…
+              </Text>
+              <Text as="p" variant="small" className="mt-3 text-muted-foreground">
+                Fetching the shared race text.
+              </Text>
+            </div>
+          </Container>
+        </main>
+      ) : null}
+
+      {showReading && lobby.passage && lobby.match && lobby.selfPlayer ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <MatchReadingScreen
+            view={lobby.matchView}
+            passage={lobby.passage}
+            match={lobby.match}
+            selfPlayer={lobby.selfPlayer}
+            opponent={lobby.opponent}
+            clockOffsetMs={lobby.clockOffsetMs}
+            focusLossCount={lobby.focusLossCount}
+            finishPending={lobby.pending.finish}
+            actionError={lobby.actionError}
+            onCountdownComplete={lobby.handleCountdownComplete}
+            onFinish={() => void lobby.handleFinishReading()}
+            onFocusLoss={lobby.registerFocusLoss}
+          />
+        </div>
+      ) : null}
+
+      {showQuiz && lobby.passage ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <MatchQuizScreen
+            view={lobby.matchView}
+            passage={lobby.passage}
+            opponent={lobby.opponent}
+            ownResult={lobby.ownResult}
+            quizPending={lobby.pending.quiz}
+            actionError={lobby.actionError}
+            onSubmit={lobby.handleSubmitQuiz}
+          />
+        </div>
+      ) : null}
+
+      {showResults ? (
+        <MatchResultsStub
+          passage={lobby.passage}
+          selfPlayer={lobby.selfPlayer}
+          opponent={lobby.opponent}
+          matchResults={lobby.matchResults}
+        />
+      ) : null}
     </>
   );
 }
