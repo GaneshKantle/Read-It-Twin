@@ -22,7 +22,10 @@ export function parsePlayerRow(value: unknown): PlayerRow {
   if (!row || typeof row.id !== 'string' || typeof row.nickname !== 'string') {
     throw new AppError('INSERT_FAILED', { message: 'Malformed player payload' });
   }
-  return row as unknown as PlayerRow;
+  return {
+    ...(row as unknown as PlayerRow),
+    wants_rematch: row.wants_rematch === true,
+  };
 }
 
 export function parseJoinResult(data: unknown): RoomJoinResult {

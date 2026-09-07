@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { DeveloperLink } from '@/components/brand/DeveloperLink';
 import { Logo } from '@/components/brand/Logo';
 import { Container } from '@/components/layout/Container';
 import { Footer } from '@/components/layout/Footer';
@@ -71,6 +72,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   {link.label}
                 </a>
               ))}
+              <DeveloperLink />
             </nav>
           )}
 
@@ -80,6 +82,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               scrolled && 'bg-background/70 p-1 backdrop-blur-md',
             )}
           >
+            <DeveloperLink className={cn(onHome && 'md:hidden')} />
             <Button
               size="sm"
               variant="secondary"

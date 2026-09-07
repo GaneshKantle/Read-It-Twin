@@ -17,6 +17,8 @@ export type AppErrorCode =
   | 'RACE_NOT_STARTED'
   | 'FINISH_TOO_EARLY'
   | 'MATCH_NOT_IN_QUIZ'
+  | 'REMATCH_UNAVAILABLE'
+  | 'OPPONENT_LEFT'
   | 'DATABASE_TIMEOUT'
   | 'INSERT_FAILED'
   | 'UPDATE_FAILED'
@@ -39,6 +41,8 @@ const USER_MESSAGES: Record<AppErrorCode, string> = {
   RACE_NOT_STARTED: 'The race has not started yet. Wait for the countdown.',
   FINISH_TOO_EARLY: 'Finish after you have actually read the passage.',
   MATCH_NOT_IN_QUIZ: 'The quiz is not open yet. Wait for both players to finish reading.',
+  REMATCH_UNAVAILABLE: 'A rematch is not available right now.',
+  OPPONENT_LEFT: 'Your opponent left the room. Rematch is unavailable.',
   DATABASE_TIMEOUT: 'The request took too long. Check your connection and try again.',
   INSERT_FAILED: 'Could not save that change. Please try again.',
   UPDATE_FAILED: 'Could not update that record. Please try again.',
@@ -116,6 +120,12 @@ export function fromSupabaseError(
   }
   if (code === 'P0013' || lower.includes('not in quiz')) {
     return new AppError('MATCH_NOT_IN_QUIZ', { cause: error });
+  }
+  if (code === 'P0014' || lower.includes('rematch not available')) {
+    return new AppError('REMATCH_UNAVAILABLE', { cause: error });
+  }
+  if (code === 'P0015' || lower.includes('opponent left')) {
+    return new AppError('OPPONENT_LEFT', { cause: error });
   }
 
   if (code === '23505' || lower.includes('duplicate')) {

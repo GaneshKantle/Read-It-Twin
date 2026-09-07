@@ -1,4 +1,5 @@
-import type { GameResult, PlayerResult, ResultComparison } from '@/types/run';
+import type { GameResult, MatchPlayerResult, PlayerResult, ResultComparison } from '@/types/run';
+import type { ResultRow } from '@/types/database';
 
 function isCleanNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
@@ -48,19 +49,61 @@ export function toPlayerResult(game: GameResult, nickname = 'You'): PlayerResult
   };
 }
 
+/** Maps an authoritative result row into the comparison shape. */
+export function resultRowToMatchPlayer(
+  row: ResultRow,
+  nickname: string,
+): MatchPlayerResult {
+  return {
+    playerId: row.player_id,
+    nickname,
+    readingTime: Math.round(row.reading_time / 1000),
+    wpm: row.wpm,
+    comprehension: Number(row.comprehension),
+    correctAnswers: row.correct_answers,
+    totalQuestions: row.total_questions,
+    finalScore: row.final_score,
+    submittedAt: row.submitted_at,
+  };
+}
+
+/**
+ * Gaps are always A minus B, so a positive number means A was ahead.
+ */
+export function compareMatchResults(
+  playerA: PlayerResult,
+  playerB: PlayerResult,
+): ResultComparison {
+  const scoreDifference = playerA.finalScore - playerB.finalScore;
+  const isDraw = scoreDifference === 0;
+  const winner: ResultComparison['winner'] = isDraw
+    ? 'draw'
+    : scoreDifference > 0
+      ? 'playerA'
+      : 'playerB';
+  const loser: ResultComparison['loser'] = isDraw
+    ? null
+    : winner === 'playerA'
+      ? 'playerB'
+      : 'playerA';
+
+  return {
+    winner,
+    loser,
+    isDraw,
+    wpmDifference: playerA.wpm - playerB.wpm,
+    comprehensionDifference: playerA.comprehension - playerB.comprehension,
+    scoreDifference,
+    readingTimeDifference: playerA.readingTime - playerB.readingTime,
+  };
+}
+
 /**
  * Gaps are always A minus B, so a positive number means A was ahead. Ready for
  * the two-player screen; the solo screen never calls it.
  */
 export function compareResults(playerA: PlayerResult, playerB: PlayerResult): ResultComparison {
-  const scoreDifference = playerA.finalScore - playerB.finalScore;
-
-  return {
-    winner: scoreDifference === 0 ? 'draw' : scoreDifference > 0 ? 'playerA' : 'playerB',
-    wpmDifference: playerA.wpm - playerB.wpm,
-    comprehensionDifference: playerA.comprehension - playerB.comprehension,
-    scoreDifference,
-  };
+  return compareMatchResults(playerA, playerB);
 }
 
 /**

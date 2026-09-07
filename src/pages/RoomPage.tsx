@@ -3,7 +3,7 @@ import { JoinPanel } from '@/components/room/JoinPanel';
 import { LobbyPanel } from '@/components/room/LobbyPanel';
 import { MatchQuizScreen } from '@/components/room/MatchQuizScreen';
 import { MatchReadingScreen } from '@/components/room/MatchReadingScreen';
-import { MatchResultsStub } from '@/components/room/MatchResultsStub';
+import { MatchResultsScreen } from '@/components/room/MatchResultsScreen';
 import { RoomError } from '@/components/room/RoomError';
 import { Container } from '@/components/layout/Container';
 import { RunTopBar } from '@/components/run/RunTopBar';
@@ -34,7 +34,7 @@ export function RoomPage() {
     racing &&
     lobby.passage &&
     (lobby.matchView === 'quiz' || lobby.matchView === 'quiz_waiting');
-  const showResults = racing && lobby.matchView === 'results';
+  const showResults = racing && lobby.matchView === 'results' && lobby.room;
 
   return (
     <>
@@ -146,12 +146,19 @@ export function RoomPage() {
         </div>
       ) : null}
 
-      {showResults ? (
-        <MatchResultsStub
+      {showResults && lobby.room ? (
+        <MatchResultsScreen
+          room={lobby.room}
+          match={lobby.match}
           passage={lobby.passage}
           selfPlayer={lobby.selfPlayer}
           opponent={lobby.opponent}
           matchResults={lobby.matchResults}
+          rematchPending={lobby.pending.rematch}
+          leavePending={lobby.pending.leave}
+          actionError={lobby.actionError}
+          onRematch={() => void lobby.handleRequestRematch()}
+          onLeave={() => void handleLeave()}
         />
       ) : null}
     </>

@@ -1,11 +1,13 @@
 import { useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { ArrowUpRight } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { BlobField } from '@/components/motion/BlobField';
 import { CircleTagline } from '@/components/motion/CircleTagline';
 import { Container } from '@/components/layout/Container';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
+import { developer } from '@/lib/developer';
 
 const tagline = ['Two people', 'One passage', 'One winner'];
 
@@ -69,16 +71,50 @@ export function Footer() {
           </motion.div>
         </div>
 
-        <div className="mt-14 flex flex-col gap-3 border-t border-ink/15 pt-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-12 flex flex-col gap-5 rounded-lg border-2 border-ink/20 bg-ink/8 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div>
+            <Text as="p" variant="hand" className="text-ink/70">
+              Developer
+            </Text>
+            <p className="mt-1 font-display text-[clamp(1.75rem,4vw,2.35rem)] font-extrabold leading-[0.9] tracking-[-0.03em]">
+              {developer.name}
+            </p>
+            <Text as="p" variant="small" className="mt-2 font-semibold text-ink/70">
+              Designed and built Read It Twin.
+            </Text>
+          </div>
+
+          <a
+            href={developer.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-ink px-5 py-3 text-label font-bold text-background transition-transform duration-fast ease-fluid hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-sec-violet"
+          >
+            Visit portfolio
+            <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+          </a>
+        </div>
+
+        <div className="mt-10 flex flex-col gap-3 border-t border-ink/15 pt-6 sm:flex-row sm:items-center sm:justify-between">
           <Text as="p" variant="small" className="font-semibold text-ink/70">
             {new Date().getFullYear()} Read It Twin
           </Text>
-          <Link
-            to="/design-system"
-            className="rounded-full text-small font-semibold text-ink/70 transition-colors duration-fast ease-fluid hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ink"
-          >
-            Design system
-          </Link>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <Link
+              to="/design-system"
+              className="rounded-full text-small font-semibold text-ink/70 transition-colors duration-fast ease-fluid hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ink"
+            >
+              Design system
+            </Link>
+            <a
+              href={developer.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full text-small font-semibold text-ink/70 transition-colors duration-fast ease-fluid hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ink"
+            >
+              Developer
+            </a>
+          </div>
         </div>
       </Container>
     </footer>

@@ -12,6 +12,15 @@ export interface PersonalRecords {
   runCount: number;
 }
 
+/** Minimal scored snapshot — solo GameResult or a multiplayer result row. */
+export interface RecordableResult {
+  wpm: number;
+  comprehension: number;
+  finalScore: number;
+  /** Stable id for this attempt (finishedAt ms or submitted_at epoch). */
+  finishedAt: number;
+}
+
 interface StoredRecords extends PersonalRecords {
   /** `finishedAt` of the run already counted, so a refresh cannot re-award it. */
   lastRecordedAt: number;
@@ -100,19 +109,56 @@ export function readPersonalRecords(): PersonalRecords {
   return toPersonalRecords(readRecords());
 }
 
+function isRecordableResult(value: unknown): value is RecordableResult {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const result = value as Partial<RecordableResult>;
+  return (
+    typeof result.wpm === 'number' &&
+    Number.isFinite(result.wpm) &&
+    result.wpm >= 0 &&
+    typeof result.comprehension === 'number' &&
+    Number.isFinite(result.comprehension) &&
+    result.comprehension >= 0 &&
+    result.comprehension <= 100 &&
+    typeof result.finalScore === 'number' &&
+    Number.isFinite(result.finalScore) &&
+    result.finalScore >= 0 &&
+    typeof result.finishedAt === 'number' &&
+    Number.isFinite(result.finishedAt)
+  );
+}
+
+function toRecordable(result: GameResult | RecordableResult): RecordableResult | null {
+  if (isValidGameResult(result)) {
+    return {
+      wpm: result.wpm,
+      comprehension: result.comprehension,
+      finalScore: result.finalScore,
+      finishedAt: result.finishedAt,
+    };
+  }
+  if (isRecordableResult(result)) {
+    return result;
+  }
+  return null;
+}
+
 /**
  * Files a finished run against the local bests and reports what it beat.
  * Called once per result; replaying the same run returns the stored verdict
  * rather than counting it again.
  */
-export function applyPersonalRecords(result: GameResult): RecordEvaluation {
+export function applyPersonalRecords(result: GameResult | RecordableResult): RecordEvaluation {
   const stored = readRecords();
+  const scored = toRecordable(result);
 
-  if (!isValidGameResult(result)) {
+  if (!scored) {
     return { firstRun: false, breaks: [], records: toPersonalRecords(stored) };
   }
 
-  if (stored.runCount > 0 && stored.lastRecordedAt === result.finishedAt) {
+  if (stored.runCount > 0 && stored.lastRecordedAt === scored.finishedAt) {
     return {
       firstRun: stored.lastFirstRun,
       breaks: stored.lastBreaks,
@@ -126,21 +172,21 @@ export function applyPersonalRecords(result: GameResult): RecordEvaluation {
     ? []
     : recordKinds.filter((kind) => {
         if (kind === 'wpm') {
-          return result.wpm > stored.bestWpm;
+          return scored.wpm > stored.bestWpm;
         }
         if (kind === 'comprehension') {
-          return result.comprehension > stored.bestComprehension;
+          return scored.comprehension > stored.bestComprehension;
         }
 
-        return result.finalScore > stored.bestScore;
+        return scored.finalScore > stored.bestScore;
       });
 
   const next: StoredRecords = {
-    bestWpm: Math.max(stored.bestWpm, result.wpm),
-    bestComprehension: Math.max(stored.bestComprehension, result.comprehension),
-    bestScore: Math.max(stored.bestScore, result.finalScore),
+    bestWpm: Math.max(stored.bestWpm, scored.wpm),
+    bestComprehension: Math.max(stored.bestComprehension, scored.comprehension),
+    bestScore: Math.max(stored.bestScore, scored.finalScore),
     runCount: stored.runCount + 1,
-    lastRecordedAt: result.finishedAt,
+    lastRecordedAt: scored.finishedAt,
     lastFirstRun: firstRun,
     lastBreaks: breaks,
   };

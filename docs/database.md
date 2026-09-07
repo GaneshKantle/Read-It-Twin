@@ -1,6 +1,6 @@
-# Database (Phase 06 + Phase 07 + Phase 08)
+# Database (Phase 06 + Phase 07 + Phase 08 + Phase 09)
 
-Supabase + PostgreSQL foundation for Read It Twin, the Phase 07 lobby RPCs, and the Phase 08 synchronized race RPCs.
+Supabase + PostgreSQL foundation for Read It Twin: lobby, synchronized race, results finalization, and rematch.
 
 ## Environment
 
@@ -19,7 +19,8 @@ If either value is empty, the solo app uses local passage seeds and does not cal
 2. Run [`supabase/migrations/20260905143000_phase06_foundation.sql`](../supabase/migrations/20260905143000_phase06_foundation.sql).
 3. Run [`supabase/migrations/20260906120000_phase07_lobby.sql`](../supabase/migrations/20260906120000_phase07_lobby.sql).
 4. Run [`supabase/migrations/20260906210000_phase08_race.sql`](../supabase/migrations/20260906210000_phase08_race.sql).
-5. Run [`supabase/seed.sql`](../supabase/seed.sql).
+5. Run [`supabase/migrations/20260907140000_phase09_results_rematch.sql`](../supabase/migrations/20260907140000_phase09_results_rematch.sql).
+6. Run [`supabase/seed.sql`](../supabase/seed.sql).
 
 To regenerate the seed from local passages:
 
@@ -34,9 +35,9 @@ npx --yes tsx --tsconfig tsconfig.app.json scripts/generate-seed.ts
 | `passages` | Reading content (`content` = paragraphs joined by blank lines) |
 | `questions` | Quiz items + `correct_answer` (not exposed to clients directly) |
 | `rooms` | Lobby container; unique 4-char `room_code`; `host_player_id`; expires after 24h |
-| `players` | Anonymous nicknames in a room (max 2); `finished` / `finished_at` / score columns |
+| `players` | Anonymous nicknames in a room (max 2); race columns + `wants_rematch` |
 | `player_sessions` | Private `(room_id, client_id)` → `session_token` (no anon SELECT) |
-| `matches` | One row per race; `race_start_at` is the authoritative reading clock; `status` enum |
+| `matches` | One row per race; `race_start_at`; `winner_player_id` (null = draw); `completed_at` |
 | `results` | Immutable score snapshot per player per match (`submitted_at`) |
 
 Relationships:
@@ -49,27 +50,29 @@ rooms 1──* matches *──1 passages (optional)
 matches 1──* results *──1 players
 ```
 
-Partial unique index: one incomplete match per room (`matches_one_active_per_room_idx`).
+Partial unique index: one incomplete match per room (`matches_one_active_per_room_idx`). Rematch creates a **new** match row after the previous one has `completed_at`.
 
 ## Room lifecycle
 
 Statuses (enum `room_status`):
 
-`waiting` → `ready` → `countdown` → `reading` → `quiz` → `results` → `closed`
+`waiting` → `ready` → `countdown` → `reading` → `quiz` → `results` → (`waiting` via rematch) → … → `closed`
 
 Match statuses (enum `match_status`):
 
 `countdown` → `reading` → `quiz` → `results` (or `cancelled`)
 
-TypeScript mirrors: `src/types/room.ts`, `src/types/match.ts`.
+TypeScript mirrors: `src/types/room.ts`, `src/types/match.ts`, `src/lib/rematch.ts`.
 
-Phase 08 transitions:
+Phase 08–09 transitions:
 
 - Host `start_match` creates a match with `race_start_at = now() + 2800ms`, resets player race columns, sets `countdown`
 - Clients derive countdown digits from `race_start_at` (not local `setTimeout`)
 - `ack_race_start` promotes `countdown` → `reading` after the start time
 - `finish_reading` records authoritative reading time; both finished → `quiz`
-- `submit_match_quiz` grades server-side and writes `results`; both submitted → `results`
+- `submit_match_quiz` grades server-side, writes `results`; both submitted → match `results` + `winner_player_id` + `completed_at`, room → `results`
+- `request_rematch` sets `wants_rematch`; when **both** players request, resets lobby (`waiting`), picks a new passage, clears race columns — does **not** insert a match
+- Host `start_match` again creates Match N for the same room
 
 ## Lobby + race RPCs (SECURITY DEFINER)
 
@@ -82,8 +85,9 @@ Phase 08 transitions:
 | `get_server_time()` | Server clock for client offset |
 | `ack_race_start(room_id, player_id, session_token)` | Promote countdown → reading |
 | `finish_reading(match_id, player_id, session_token)` | Record finish; advance to quiz when both done |
-| `submit_match_quiz(match_id, player_id, session_token, answers)` | Grade + store result |
-| `leave_room(player_id, session_token)` | Leave lobby; mid-race keeps seat for refresh |
+| `submit_match_quiz(match_id, player_id, session_token, answers)` | Grade + store result; set winner when both done |
+| `request_rematch(player_id, session_token)` | Rematch negotiation; both ready → lobby + new passage |
+| `leave_room(player_id, session_token)` | Leave lobby; mid-race keeps seat; results leave closes room |
 | `get_room_by_code(room_code)` | Lookup with soft-expire |
 
 Postgres error codes mapped in the client:
@@ -102,6 +106,25 @@ Postgres error codes mapped in the client:
 | `P0011` | race not started |
 | `P0012` | finish too early |
 | `P0013` | match not in quiz |
+| `P0014` | rematch not available |
+| `P0015` | opponent left (rematch needs two players) |
+
+## Winner / draw
+
+`final_score = round(wpm × comprehension/100)`. When both results exist, the server sets:
+
+- `winner_player_id` = higher `final_score`
+- `winner_player_id` = `NULL` on a draw
+
+Clients never declare a winner. Comparison UI reads stored results + `winner_player_id`.
+
+## Rematch
+
+Rematch state is derived on the client from `players.wants_rematch` (host = player A):
+
+`none` | `player_a_requested` | `player_b_requested` | `both_ready`
+
+Both accepting returns the room to `waiting` with a different `passage_id` when available. Ready/start then creates the next match row. Historical matches and results are kept.
 
 ## Question security
 
@@ -115,11 +138,11 @@ Postgres error codes mapped in the client:
 - Passages: public read.
 - Rooms / players / matches / results: **SELECT only** for anon. Writes go through SECURITY DEFINER RPCs that require a `session_token`.
 - `player_sessions`: RLS enabled, no policies (deny).
-- Results: immutable after write (no UPDATE policy; INSERT revoked for anon).
+- Results: immutable after write (no UPDATE policy; INSERT revoked for anon). `results.player_id` uses `ON DELETE RESTRICT` so history cannot be cascade-deleted.
 
 ## Realtime
 
-`rooms`, `players`, and `matches` are in `supabase_realtime`. The app subscribes via `subscribeToRoom(roomId, callbacks)` in `src/lib/services/realtime.ts`.
+`rooms`, `players`, and `matches` are in `supabase_realtime`. The app subscribes via `subscribeToRoom(roomId, callbacks)` in `src/lib/services/realtime.ts`. Results are fetched with a SELECT when the match/room reaches `results`.
 
 ## Client services
 
@@ -130,10 +153,13 @@ Postgres error codes mapped in the client:
 | `src/lib/session/playerSession.ts` | Anonymous `client_id` + room session in localStorage |
 | `src/lib/clockSync.ts` | Client/server clock offset |
 | `src/lib/matchView.ts` | Pure match view resolver |
+| `src/lib/rematch.ts` | Rematch state + outcome helpers |
+| `src/lib/results.ts` | `compareMatchResults` + result row mapping |
+| `src/lib/matchInsights.ts` | Deterministic head-to-head copy |
 | `src/lib/services/passages.ts` | Passage queries |
 | `src/lib/services/questions.ts` | Public questions + grade RPC |
 | `src/lib/services/rooms.ts` | Room create/join helpers + lookups |
-| `src/lib/services/players.ts` | Join / ready / leave RPCs + player reads |
+| `src/lib/services/players.ts` | Join / ready / leave / rematch RPCs + player reads |
 | `src/lib/services/matches.ts` | Start / ack / finish / quiz RPCs + match reads |
 | `src/lib/services/realtime.ts` | Room + player + match subscriptions |
 | `src/lib/services/results.ts` | Fetch results (writes via RPC only) |

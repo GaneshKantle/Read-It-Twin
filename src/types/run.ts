@@ -123,6 +123,12 @@ export interface PlayerResult {
   finalScore: number;
 }
 
+/** Authoritative match result row shaped for comparison UI. */
+export interface MatchPlayerResult extends PlayerResult {
+  playerId: string;
+  submittedAt: string;
+}
+
 /** Which shape the result screen takes. Only `solo` is reachable today. */
 export type ResultOutcome = 'solo' | 'win' | 'loss' | 'draw';
 
@@ -131,7 +137,10 @@ export type ComparisonWinner = 'playerA' | 'playerB' | 'draw';
 /** Signed gaps between two players, always measured as A minus B. */
 export interface ResultComparison {
   winner: ComparisonWinner;
+  loser: ComparisonWinner | null;
+  isDraw: boolean;
   wpmDifference: number;
   comprehensionDifference: number;
   scoreDifference: number;
+  readingTimeDifference: number;
 }

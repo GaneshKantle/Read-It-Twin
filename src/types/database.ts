@@ -61,6 +61,7 @@ export type PlayerRow = {
   total_questions: number | null;
   comprehension: number | null;
   final_score: number | null;
+  wants_rematch: boolean;
 };
 
 export type PlayerSessionRow = {
@@ -80,6 +81,8 @@ export type MatchRow = {
   race_start_at: string | null;
   status: MatchStatus;
   completed_at: string | null;
+  /** Null when the match is a draw or not yet finalized. */
+  winner_player_id: string | null;
 };
 
 export type ResultRow = {
@@ -152,6 +155,14 @@ export type LeaveRoomResult = {
   room: RoomRow;
   closed: boolean;
   host_left: boolean;
+  kept_seat?: boolean;
+};
+
+export type RequestRematchResult = {
+  room: RoomRow;
+  players: PlayerRow[];
+  rematch_ready: boolean;
+  server_now: string;
 };
 
 export type Json =
@@ -270,6 +281,7 @@ export type Database = {
           total_questions?: number | null;
           comprehension?: number | null;
           final_score?: number | null;
+          wants_rematch?: boolean;
         };
         Update: {
           id?: string;
@@ -285,6 +297,7 @@ export type Database = {
           total_questions?: number | null;
           comprehension?: number | null;
           final_score?: number | null;
+          wants_rematch?: boolean;
         };
         Relationships: [
           {
@@ -341,6 +354,7 @@ export type Database = {
           race_start_at?: string | null;
           status?: MatchStatus;
           completed_at?: string | null;
+          winner_player_id?: string | null;
         };
         Update: {
           id?: string;
@@ -350,6 +364,7 @@ export type Database = {
           race_start_at?: string | null;
           status?: MatchStatus;
           completed_at?: string | null;
+          winner_player_id?: string | null;
         };
         Relationships: [
           {
@@ -364,6 +379,13 @@ export type Database = {
             columns: ['passage_id'];
             isOneToOne: false;
             referencedRelation: 'passages';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'matches_winner_player_id_fkey';
+            columns: ['winner_player_id'];
+            isOneToOne: false;
+            referencedRelation: 'players';
             referencedColumns: ['id'];
           },
         ];
@@ -507,6 +529,13 @@ export type Database = {
         Returns: Json;
       };
       leave_room: {
+        Args: {
+          p_player_id: string;
+          p_session_token: string;
+        };
+        Returns: Json;
+      };
+      request_rematch: {
         Args: {
           p_player_id: string;
           p_session_token: string;

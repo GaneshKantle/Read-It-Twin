@@ -23,7 +23,11 @@ function parseMatchRow(value: unknown): MatchRow | null {
   if (typeof row.id !== 'string') {
     return null;
   }
-  return row as unknown as MatchRow;
+  return {
+    ...(row as unknown as MatchRow),
+    winner_player_id:
+      typeof row.winner_player_id === 'string' ? row.winner_player_id : null,
+  };
 }
 
 function parseResultRow(value: unknown): ResultRow | null {
@@ -211,7 +215,10 @@ export async function getMatch(matchId: string): Promise<MatchRow> {
     throw new AppError('MATCH_NOT_FOUND', { message: `Match ${matchId} not found` });
   }
 
-  return data;
+  return {
+    ...data,
+    winner_player_id: data.winner_player_id ?? null,
+  };
 }
 
 export async function getLatestMatchForRoom(roomId: string): Promise<MatchRow | null> {
@@ -228,7 +235,62 @@ export async function getLatestMatchForRoom(roomId: string): Promise<MatchRow | 
     throw fromSupabaseError(error, 'UNKNOWN');
   }
 
-  return data;
+  return data
+    ? {
+        ...data,
+        winner_player_id: data.winner_player_id ?? null,
+      }
+    : null;
+}
+
+/** Incomplete race for the room, if any. */
+export async function getActiveMatchForRoom(roomId: string): Promise<MatchRow | null> {
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from('matches')
+    .select('*')
+    .eq('room_id', roomId)
+    .is('completed_at', null)
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw fromSupabaseError(error, 'UNKNOWN');
+  }
+
+  return data
+    ? {
+        ...data,
+        winner_player_id: data.winner_player_id ?? null,
+      }
+    : null;
+}
+
+/** Most recently completed match — used on the results screen. */
+export async function getLatestCompletedMatchForRoom(
+  roomId: string,
+): Promise<MatchRow | null> {
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from('matches')
+    .select('*')
+    .eq('room_id', roomId)
+    .not('completed_at', 'is', null)
+    .order('completed_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw fromSupabaseError(error, 'UNKNOWN');
+  }
+
+  return data
+    ? {
+        ...data,
+        winner_player_id: data.winner_player_id ?? null,
+      }
+    : null;
 }
 
 /** @deprecated Prefer startMatch RPC. */

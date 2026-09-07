@@ -19,7 +19,19 @@ export type ResolveMatchViewInput = {
 export function resolveMatchView(input: ResolveMatchViewInput): MatchView {
   const { room, match, selfPlayer, ownResult, clockOffsetMs = 0 } = input;
 
-  if (!room || room.status === 'waiting' || room.status === 'ready' || room.status === 'closed') {
+  if (!room) {
+    return 'lobby';
+  }
+
+  // Completed match remains viewable after the room closes (opponent left).
+  if (room.status === 'closed') {
+    if (match?.status === 'results' || match?.completed_at) {
+      return 'results';
+    }
+    return 'lobby';
+  }
+
+  if (room.status === 'waiting' || room.status === 'ready') {
     return 'lobby';
   }
 
