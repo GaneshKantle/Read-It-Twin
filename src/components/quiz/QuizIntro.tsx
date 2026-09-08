@@ -49,7 +49,7 @@ export function QuizIntro({ questionCount, passageTitle, onStart }: QuizIntroPro
           <Text as="p" variant="hand">
             No going back once you answer
           </Text>
-          <Button size="lg" arrow className="w-full sm:w-auto" onClick={onStart} autoFocus>
+          <Button size="lg" arrow className="w-full sm:w-auto" onClick={onStart}>
             First question
           </Button>
         </motion.div>

@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /room/
+Disallow: /join/
+Disallow: /play/read
+Disallow: /play/quiz
+Disallow: /play/results
+
+Sitemap: /sitemap.xml

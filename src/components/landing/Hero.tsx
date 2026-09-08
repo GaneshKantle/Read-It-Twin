@@ -1,4 +1,5 @@
 import type { PointerEvent as ReactPointerEvent } from 'react';
+import { useMemo } from 'react';
 import {
   motion,
   useMotionValue,
@@ -16,6 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { useIdleFloat } from '@/hooks/useIdleFloat';
 import { fadeUp, lineReveal, staggerContainer, springSoft } from '@/lib/motion';
+import { readPersonalRecords } from '@/lib/records';
 
 const headline = ['Two people.', 'One passage.', 'One winner.'];
 
@@ -41,6 +43,12 @@ const floaters = [
 export function Hero() {
   const navigate = useNavigate();
   const prefersReducedMotion = useReducedMotion();
+  const handLine = useMemo(() => {
+    const { runCount } = readPersonalRecords();
+    return runCount > 0
+      ? 'Welcome back. Beat your last score.'
+      : 'Read. Understand. Challenge a friend.';
+  }, []);
 
   // Normalised pointer position across the visual, -0.5 to 0.5.
   const pointerX = useMotionValue(0);
@@ -113,7 +121,7 @@ export function Hero() {
 
             <motion.div variants={fadeUp} className="mt-7">
               <SplitChars
-                text="Solo now. Multiplayer next."
+                text={handLine}
                 className="font-hand text-hand font-semibold text-violet"
                 delay={0.5}
               />

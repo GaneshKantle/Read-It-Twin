@@ -102,7 +102,8 @@ export type GradeAnswerItem = {
   questionId: string;
   selectedIndex: number | null;
   correct: boolean;
-  correctAnswerIndex: number;
+  /** Present only after a complete solo grade (or match quiz submit). */
+  correctAnswerIndex?: number;
 };
 
 export type GradePassageResult = {

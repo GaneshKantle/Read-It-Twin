@@ -126,9 +126,18 @@ export function LobbyPanel({
       </motion.div>
 
       <motion.div variants={fadeUp} className="mt-8 rounded-lg border-2 border-border bg-surface p-5 sm:p-6">
-        <Text as="p" variant="subheading">
+        <Text as="p" variant="subheading" aria-live="polite">
           {statusCopy}
         </Text>
+        <span className="sr-only" aria-live="polite">
+          {selfReady ? 'You are ready.' : 'You are not ready.'}
+          {opponent
+            ? opponent.ready
+              ? ` ${opponent.nickname} is ready.`
+              : ` ${opponent.nickname} is not ready.`
+            : ' Waiting for opponent.'}
+          {bothReady ? ' Both players are ready.' : ''}
+        </span>
       </motion.div>
 
       {actionError ? (

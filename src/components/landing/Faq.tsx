@@ -24,9 +24,9 @@ const questions = [
       'They are written for this app across nine categories and four difficulty bands, from a gentle warm-up to prose that argues back. Each one carries eight questions built against the text.',
   },
   {
-    question: 'Can I play against a friend yet?',
+    question: 'Can I play against a friend?',
     answer:
-      'Yes — hit Challenge a friend, create a room, and send the invite link. Lobby, ready checks, and match start are live; the synchronized reading race lands next.',
+      'Yes. Hit Challenge a friend, create a room, and send the invite link. When both of you are ready, the host starts the race — same passage, same quiz, one winner. After results you can run it back.',
   },
 ];
 

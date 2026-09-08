@@ -2,11 +2,12 @@ import type { GameResult, PassageQuestion, QuizAnswer, RunResult } from '@/types
 
 /** Percentage of questions answered correctly, 0-100. */
 export function calculateComprehension(correctAnswers: number, totalQuestions: number): number {
-  if (totalQuestions <= 0) {
+  if (!Number.isFinite(correctAnswers) || !Number.isFinite(totalQuestions) || totalQuestions <= 0) {
     return 0;
   }
 
-  return (correctAnswers / totalQuestions) * 100;
+  const safeCorrect = Math.max(0, correctAnswers);
+  return (safeCorrect / totalQuestions) * 100;
 }
 
 /**
@@ -14,7 +15,11 @@ export function calculateComprehension(correctAnswers: number, totalQuestions: n
  * comprehension scores 278.
  */
 export function calculateFinalScore(wpm: number, comprehension: number): number {
-  return Math.round(wpm * (comprehension / 100));
+  if (!Number.isFinite(wpm) || !Number.isFinite(comprehension)) {
+    return 0;
+  }
+
+  return Math.round(Math.max(0, wpm) * (Math.max(0, comprehension) / 100));
 }
 
 /**
@@ -22,11 +27,17 @@ export function calculateFinalScore(wpm: number, comprehension: number): number 
  * trim it when it is not needed: 37.5 stays exact, 50 stays clean.
  */
 export function formatComprehension(comprehension: number): string {
+  if (!Number.isFinite(comprehension)) {
+    return '0%';
+  }
   return `${Number(comprehension.toFixed(1))}%`;
 }
 
 /** The multiplier as shown beside the score, precise enough to multiply out. */
 export function formatMultiplier(comprehension: number): string {
+  if (!Number.isFinite(comprehension)) {
+    return '0';
+  }
   return String(Number((comprehension / 100).toFixed(3)));
 }
 

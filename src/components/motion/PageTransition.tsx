@@ -1,8 +1,14 @@
 import type { ReactNode } from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { motionEase, motionTiming } from '@/lib/motion';
 
 export function PageTransition({ children }: { children: ReactNode }) {
+  const prefersReducedMotion = useReducedMotion();
+
+  if (prefersReducedMotion) {
+    return <div>{children}</div>;
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 14 }}

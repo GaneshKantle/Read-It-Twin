@@ -6,16 +6,19 @@ import { ChallengePage } from '@/pages/ChallengePage';
 import { DesignSystemPage } from '@/pages/DesignSystemPage';
 import { HomePage } from '@/pages/HomePage';
 import { JoinRedirectPage } from '@/pages/JoinRedirectPage';
+import { NotFoundPage } from '@/pages/NotFoundPage';
 import { QuizPage } from '@/pages/QuizPage';
 import { ReadingPage } from '@/pages/ReadingPage';
 import { ResultsPage } from '@/pages/ResultsPage';
 import { RoomPage } from '@/pages/RoomPage';
+import { RouteErrorPage } from '@/pages/RouteErrorPage';
 import { SetupPage } from '@/pages/SetupPage';
 
 export const router = createBrowserRouter([
   {
     path: '/',
     element: <App />,
+    errorElement: <RouteErrorPage />,
     children: [
       {
         index: true,
@@ -25,11 +28,16 @@ export const router = createBrowserRouter([
         path: 'design-system',
         element: <DesignSystemPage />,
       },
+      {
+        path: '*',
+        element: <NotFoundPage />,
+      },
     ],
   },
   {
     path: '/play',
     element: <RunLayout />,
+    errorElement: <RouteErrorPage />,
     children: [
       {
         index: true,
@@ -51,6 +59,7 @@ export const router = createBrowserRouter([
   },
   {
     element: <RoomLayout />,
+    errorElement: <RouteErrorPage />,
     children: [
       {
         path: 'challenge',
@@ -65,5 +74,11 @@ export const router = createBrowserRouter([
         element: <JoinRedirectPage />,
       },
     ],
+  },
+  {
+    path: '*',
+    element: <App />,
+    errorElement: <RouteErrorPage />,
+    children: [{ path: '*', element: <NotFoundPage /> }],
   },
 ]);

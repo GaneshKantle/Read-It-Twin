@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Container } from '@/components/layout/Container';
@@ -14,7 +14,9 @@ import { ScoreBreakdown } from '@/components/results/ScoreBreakdown';
 import { ScoreExplanation } from '@/components/results/ScoreExplanation';
 import { RunTopBar } from '@/components/run/RunTopBar';
 import { categoryLabel, difficultyLabel } from '@/data/runOptions';
+import { useDocumentMeta } from '@/hooks/useDocumentMeta';
 import { useRun } from '@/hooks/useRun';
+import { track } from '@/lib/analytics';
 import { buildInsights } from '@/lib/insights';
 import { applyPersonalRecords } from '@/lib/records';
 import { readResultSnapshot } from '@/lib/resultSnapshot';
@@ -34,11 +36,23 @@ export function ResultsPage() {
   const { passage, gameResult, startRun, resetRun } = useRun();
   const [busy, setBusy] = useState(false);
 
+  useDocumentMeta({
+    title: 'Results · Read It Twin',
+    description: 'Your reading speed, comprehension, and effective score.',
+    robots: 'noindex,nofollow',
+  });
+
   const result = useMemo(() => resolveResult(gameResult), [gameResult]);
   const player = useMemo(() => (result ? toPlayerResult(result) : null), [result]);
 
   // Idempotent for the same finishedAt, so a refresh cannot re-award a record.
   const evaluation = useMemo(() => (result ? applyPersonalRecords(result) : null), [result]);
+
+  useEffect(() => {
+    if (result) {
+      track('solo_completed');
+    }
+  }, [result]);
 
   const insights = useMemo(() => {
     if (!player || !result) {
@@ -113,6 +127,10 @@ export function ResultsPage() {
 
             <ResultActions
               busy={busy}
+              wpm={player.wpm}
+              comprehension={player.comprehension}
+              score={player.finalScore}
+              personalBest={Boolean(evaluation && evaluation.breaks.length > 0)}
               onRunItBack={() => void handleRunItBack()}
               onNewRun={handleNewRun}
             />

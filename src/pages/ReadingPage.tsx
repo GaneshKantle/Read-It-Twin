@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { AnimatePresence, useScroll } from 'framer-motion';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Countdown } from '@/components/run/Countdown';
@@ -8,11 +8,13 @@ import { readingShell } from '@/components/run/readingLayout';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { categoryLabel, difficultyLabel } from '@/data/runOptions';
+import { useDocumentMeta } from '@/hooks/useDocumentMeta';
 import { useElapsedTime } from '@/hooks/useElapsedTime';
 import { useReachedEnd } from '@/hooks/useReachedEnd';
 import { useRun } from '@/hooks/useRun';
 import { useTabFocusGuard } from '@/hooks/useTabFocusGuard';
 import { cn } from '@/lib/cn';
+import { readPersonalRecords } from '@/lib/records';
 import { minimumReadMs } from '@/lib/reading';
 
 /** How long the finish overlay plays before the quiz takes over. */
@@ -22,6 +24,12 @@ export function ReadingPage() {
   const navigate = useNavigate();
   const { passage, phase, startedPerf, focusLossCount, beginReading, finishRun, registerFocusLoss } =
     useRun();
+
+  useDocumentMeta({
+    title: 'Reading · Read It Twin',
+    description: 'Read the passage, then prove you understood it.',
+    robots: 'noindex,nofollow',
+  });
 
   const articleRef = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({
@@ -33,6 +41,8 @@ export function ReadingPage() {
   const { ref: endRef, reached } = useReachedEnd<HTMLDivElement>();
 
   useTabFocusGuard(phase === 'reading', registerFocusLoss);
+
+  const isFirstRun = useMemo(() => readPersonalRecords().runCount === 0, []);
 
   useEffect(() => {
     if (phase !== 'finishing') {
@@ -85,6 +95,11 @@ export function ReadingPage() {
               <h1 className="mt-5 font-display text-[clamp(2rem,5.5vw,3rem)] font-extrabold leading-[0.92] tracking-[-0.03em]">
                 {passage.title}
               </h1>
+              {isFirstRun && phase === 'reading' ? (
+                <Text as="p" variant="hand" className="mt-3 text-reading-ink/55">
+                  Read normally. Speed isn&apos;t everything.
+                </Text>
+              ) : null}
             </header>
 
             <div className="mt-8 select-none space-y-6 text-reading leading-[1.75] text-reading-ink/90 sm:mt-10 sm:space-y-7">

@@ -7,6 +7,8 @@ import { Container } from '@/components/layout/Container';
 import { RunTopBar } from '@/components/run/RunTopBar';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
+import { useDocumentMeta } from '@/hooks/useDocumentMeta';
+import { track } from '@/lib/analytics';
 import { getOrCreateClientId, writeRoomSession } from '@/lib/session/playerSession';
 import { isSupabaseConfigured } from '@/lib/supabase/client';
 import { AppError, isAppError } from '@/lib/supabase/errors';
@@ -18,6 +20,12 @@ export function ChallengePage() {
   const [nickname, setNickname] = useState('');
   const [pending, setPending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useDocumentMeta({
+    title: 'Create a race · Read It Twin',
+    description: 'Create a room, share the invite, and race a friend on the same passage.',
+    robots: 'index,follow',
+  });
 
   if (!isSupabaseConfigured()) {
     return (
@@ -55,6 +63,7 @@ export function ChallengePage() {
         playerId: result.player.id,
         sessionToken: result.session_token,
       });
+      track('room_created');
       navigate(`/room/${result.room.room_code}`, { replace: true });
     } catch (error) {
       const message = isAppError(error)

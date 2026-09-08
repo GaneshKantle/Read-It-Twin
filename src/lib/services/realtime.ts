@@ -1,11 +1,14 @@
 import { getSupabaseClient } from '@/lib/supabase/client';
-import type { MatchRow, PlayerRow, RoomRow } from '@/types/database';
+import type { MatchRow, RoomRow } from '@/types/database';
+
+export type RoomRealtimeStatus = 'SUBSCRIBED' | 'TIMED_OUT' | 'CHANNEL_ERROR' | 'CLOSED';
 
 export type RoomRealtimeCallbacks = {
   onRoomChange?: (room: RoomRow) => void;
   onPlayersChange?: () => void;
   onMatchChange?: (match: MatchRow) => void;
   onSubscribed?: () => void;
+  onStatus?: (status: RoomRealtimeStatus) => void;
   onError?: (error: Error) => void;
 };
 
@@ -64,11 +67,25 @@ export function subscribeToRoom(roomId: string, callbacks: RoomRealtimeCallbacks
       },
     )
     .subscribe((status) => {
+      if (
+        status === 'SUBSCRIBED' ||
+        status === 'TIMED_OUT' ||
+        status === 'CHANNEL_ERROR' ||
+        status === 'CLOSED'
+      ) {
+        callbacks.onStatus?.(status);
+      }
+
       if (status === 'SUBSCRIBED') {
         callbacks.onSubscribed?.();
       }
-      if (status === 'CHANNEL_ERROR') {
-        callbacks.onError?.(new Error('Realtime channel error'));
+
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        callbacks.onError?.(
+          new Error(
+            status === 'TIMED_OUT' ? 'Realtime channel timed out' : 'Realtime channel error',
+          ),
+        );
       }
     });
 
@@ -77,4 +94,4 @@ export function subscribeToRoom(roomId: string, callbacks: RoomRealtimeCallbacks
   };
 }
 
-export type { MatchRow, PlayerRow, RoomRow };
+export type { MatchRow, RoomRow };

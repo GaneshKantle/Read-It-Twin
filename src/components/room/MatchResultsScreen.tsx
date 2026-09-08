@@ -11,6 +11,7 @@ import { resultStagger } from '@/components/results/resultMotion';
 import { Text } from '@/components/ui/Text';
 import { fadeUp } from '@/lib/motion';
 import { buildMatchInsights } from '@/lib/matchInsights';
+import { formatComprehension } from '@/lib/scoring';
 import { applyPersonalRecords } from '@/lib/records';
 import { outcomeFromWinner, resolveRematchState } from '@/lib/rematch';
 import { compareMatchResults, resultRowToMatchPlayer } from '@/lib/results';
@@ -30,6 +31,20 @@ type MatchResultsScreenProps = {
   onRematch: () => void;
   onLeave: () => void;
 };
+
+function outcomeSummary(
+  outcome: 'win' | 'loss' | 'draw',
+  selfScore: number,
+  opponentScore: number,
+): string {
+  if (outcome === 'draw') {
+    return `It is a draw. Both scored ${selfScore}.`;
+  }
+  if (outcome === 'win') {
+    return `You win because your effective score ${selfScore} beat ${opponentScore}.`;
+  }
+  return `You lose because your effective score ${selfScore} was below ${opponentScore}.`;
+}
 
 export function MatchResultsScreen({
   room,
@@ -125,6 +140,22 @@ export function MatchResultsScreen({
         >
           <ResultOutcome outcome={outcome} />
 
+          {resultsReady && selfPlayerResult && opponentPlayerResult ? (
+            <p className="sr-only" aria-live="polite">
+              {outcomeSummary(
+                outcome,
+                selfPlayerResult.finalScore,
+                opponentPlayerResult.finalScore,
+              )}{' '}
+              You: {selfPlayerResult.wpm} WPM,{' '}
+              {formatComprehension(selfPlayerResult.comprehension)} comprehension, score{' '}
+              {selfPlayerResult.finalScore}. {opponentPlayerResult.nickname}:{' '}
+              {opponentPlayerResult.wpm} WPM,{' '}
+              {formatComprehension(opponentPlayerResult.comprehension)} comprehension, score{' '}
+              {opponentPlayerResult.finalScore}.
+            </p>
+          ) : null}
+
           {passage ? (
             <motion.div variants={fadeUp} className="mt-3">
               <Text as="p" variant="small" className="font-semibold text-muted-foreground">
@@ -198,6 +229,18 @@ export function MatchResultsScreen({
                 actionError={actionError}
                 onRematch={onRematch}
                 onLeave={onLeave}
+                share={
+                  selfPlayerResult
+                    ? {
+                        wpm: selfPlayerResult.wpm,
+                        comprehension: selfPlayerResult.comprehension,
+                        score: selfPlayerResult.finalScore,
+                        opponentScore: opponentPlayerResult?.finalScore,
+                        outcome,
+                        personalBest: Boolean(evaluation && evaluation.breaks.length > 0),
+                      }
+                    : null
+                }
               />
             </>
           )}

@@ -1,6 +1,6 @@
-# Database (Phase 06 + Phase 07 + Phase 08 + Phase 09)
+# Database (Phase 06–10)
 
-Supabase + PostgreSQL foundation for Read It Twin: lobby, synchronized race, results finalization, and rematch.
+Supabase + PostgreSQL foundation for Read It Twin: lobby, synchronized race, results finalization, rematch, and Phase 10 production hardening.
 
 ## Environment
 
@@ -20,7 +20,10 @@ If either value is empty, the solo app uses local passage seeds and does not cal
 3. Run [`supabase/migrations/20260906120000_phase07_lobby.sql`](../supabase/migrations/20260906120000_phase07_lobby.sql).
 4. Run [`supabase/migrations/20260906210000_phase08_race.sql`](../supabase/migrations/20260906210000_phase08_race.sql).
 5. Run [`supabase/migrations/20260907140000_phase09_results_rematch.sql`](../supabase/migrations/20260907140000_phase09_results_rematch.sql).
-6. Run [`supabase/seed.sql`](../supabase/seed.sql).
+6. Run [`supabase/migrations/20260908120000_phase10_hardening.sql`](../supabase/migrations/20260908120000_phase10_hardening.sql).
+7. Run [`supabase/migrations/20260908121000_phase10_revoke_rls_auto_enable.sql`](../supabase/migrations/20260908121000_phase10_revoke_rls_auto_enable.sql).
+8. Run [`supabase/migrations/20260908122000_phase10_questions_public_access.sql`](../supabase/migrations/20260908122000_phase10_questions_public_access.sql).
+9. Run [`supabase/seed.sql`](../supabase/seed.sql).
 
 To regenerate the seed from local passages:
 
@@ -78,8 +81,8 @@ Phase 08–09 transitions:
 
 | RPC | Purpose |
 |-----|---------|
-| `create_room_and_join(nickname, client_id)` | Create room + host player + session |
-| `join_room(room_code, nickname, client_id)` | Join or restore the same session (idempotent) |
+| `create_room_and_join(nickname, client_id)` | Create room + host player + session (rate limited) |
+| `join_room(room_code, nickname, client_id)` | Join or restore the same session (idempotent; unique nicknames) |
 | `set_player_ready(player_id, session_token, ready)` | Toggle ready; sync room status |
 | `start_match(room_id, player_id, session_token)` | Host-only start; create match + `race_start_at` |
 | `get_server_time()` | Server clock for client offset |
@@ -89,6 +92,9 @@ Phase 08–09 transitions:
 | `request_rematch(player_id, session_token)` | Rematch negotiation; both ready → lobby + new passage |
 | `leave_room(player_id, session_token)` | Leave lobby; mid-race keeps seat; results leave closes room |
 | `get_room_by_code(room_code)` | Lookup with soft-expire |
+| `grade_passage_answers(passage_id, answers)` | Solo grading only; blocked during active multiplayer matches |
+
+**Revoked from anon/authenticated (Phase 10):** `expire_room`, `create_room_with_code`, `assert_room_active`, `generate_room_code`, `rls_auto_enable`.
 
 Postgres error codes mapped in the client:
 
@@ -98,6 +104,7 @@ Postgres error codes mapped in the client:
 | `P0002` | not found |
 | `P0003` | full |
 | `P0004` | session |
+| `P0005` | nickname required |
 | `P0006` | closed |
 | `P0007` | not host |
 | `P0008` | not ready |
@@ -105,9 +112,11 @@ Postgres error codes mapped in the client:
 | `P0010` | match not active |
 | `P0011` | race not started |
 | `P0012` | finish too early |
-| `P0013` | match not in quiz |
+| `P0013` | match not in quiz / multiplayer grade blocked |
 | `P0014` | rematch not available |
 | `P0015` | opponent left (rematch needs two players) |
+| `P0016` | room create rate limited |
+| `P0017` | nickname taken in room |
 
 ## Winner / draw
 
@@ -126,23 +135,49 @@ Rematch state is derived on the client from `players.wants_rematch` (host = play
 
 Both accepting returns the room to `waiting` with a different `passage_id` when available. Ready/start then creates the next match row. Historical matches and results are kept.
 
-## Question security
+## Question security (Phase 10)
 
-- Anon clients **cannot** `SELECT` from `questions` (no RLS policy).
-- Public quiz data comes from view `questions_public` (no `correct_answer`).
+- Anon clients **cannot** select `questions.correct_answer` (column not granted).
+- Public quiz data comes from view `questions_public` (`security_invoker = true`, no `correct_answer`).
+- Anon/authenticated may `SELECT` only: `id`, `passage_id`, `question`, `options`, `type`, `created_at`.
 - Solo grading: RPC `grade_passage_answers(passage_id, answers)`.
+  - Refuses while an incomplete multiplayer match uses that passage.
+  - Returns `correctAnswerIndex` only after every question has a submitted selection (answer review).
 - Multiplayer grading: `submit_match_quiz` grades internally and stores the result.
 
 ## RLS notes (anonymous MVP)
 
 - Passages: public read.
 - Rooms / players / matches / results: **SELECT only** for anon. Writes go through SECURITY DEFINER RPCs that require a `session_token`.
+- World-readable SELECT is intentional for Realtime without Auth. Treat room codes as weak capability tokens, not secrets.
 - `player_sessions`: RLS enabled, no policies (deny).
 - Results: immutable after write (no UPDATE policy; INSERT revoked for anon). `results.player_id` uses `ON DELETE RESTRICT` so history cannot be cascade-deleted.
 
 ## Realtime
 
-`rooms`, `players`, and `matches` are in `supabase_realtime`. The app subscribes via `subscribeToRoom(roomId, callbacks)` in `src/lib/services/realtime.ts`. Results are fetched with a SELECT when the match/room reaches `results`.
+`rooms`, `players`, and `matches` are in `supabase_realtime`. The app subscribes via `subscribeToRoom(roomId, callbacks)` in `src/lib/services/realtime.ts`. Results are fetched with a SELECT when the match/room reaches `results`. Clients refetch on subscribe / channel error / timeout and do not destroy the session solely because the websocket dropped.
+
+## Abuse / rate limits
+
+- `create_room_and_join`: max 8 rooms hosted by the same `client_id` in 10 minutes.
+- Nicknames: 1–24 trimmed characters; unique per room (case-insensitive).
+- No IP rate limiting at the database layer.
+
+## Stale room cleanup
+
+Rooms soft-close when `expires_at` passes (default 24h) or when host/results leave closes them. Historical `matches` / `results` are retained.
+
+Optional manual cleanup:
+
+```sql
+-- Soft-close expired open rooms
+update public.rooms
+set status = 'closed'
+where status <> 'closed'
+  and expires_at <= now();
+```
+
+Scheduled cron is not required for the MVP. Do not delete completed match results unless you also archive history intentionally.
 
 ## Client services
 

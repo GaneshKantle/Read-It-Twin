@@ -24,11 +24,11 @@ export function countWordsIn(paragraphs: string[]): number {
 
 /** Whole words per minute, so the figure shown is the figure scored. */
 export function calculateWpm(wordCount: number, durationMs: number): number {
-  if (durationMs <= 0) {
+  if (!Number.isFinite(wordCount) || !Number.isFinite(durationMs) || durationMs <= 0) {
     return 0;
   }
 
-  return Math.round(wordCount / (durationMs / 60_000));
+  return Math.round(Math.max(0, wordCount) / (durationMs / 60_000));
 }
 
 export function estimateReadingMs(wordCount: number, difficulty: Difficulty): number {

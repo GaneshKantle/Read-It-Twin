@@ -10,7 +10,9 @@ import { optionLetters } from '@/components/quiz/OptionRow';
 import { RunTopBar } from '@/components/run/RunTopBar';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
+import { useDocumentMeta } from '@/hooks/useDocumentMeta';
 import { useRun } from '@/hooks/useRun';
+import { track } from '@/lib/analytics';
 import { motionEase, motionTiming } from '@/lib/motion';
 
 type QuizStage = 'intro' | 'question' | 'scoring';
@@ -21,6 +23,12 @@ const SCORING_MS = 1300;
 export function QuizPage() {
   const navigate = useNavigate();
   const { passage, result, selections, selectAnswer, submitQuiz } = useRun();
+
+  useDocumentMeta({
+    title: 'Quiz · Read It Twin',
+    description: 'Answer comprehension questions on the passage you just read.',
+    robots: 'noindex,nofollow',
+  });
 
   const [stage, setStage] = useState<QuizStage>('intro');
   const [index, setIndex] = useState(0);
@@ -39,7 +47,10 @@ export function QuizPage() {
       return;
     }
 
-    void submitQuiz().then(() => setStage('scoring'));
+    void submitQuiz().then(() => {
+      track('quiz_completed', { mode: 'solo' });
+      setStage('scoring');
+    });
   }, [index, selections, submitQuiz, total]);
 
   useEffect(() => {
@@ -95,7 +106,33 @@ export function QuizPage() {
     return <Navigate to="/play" replace />;
   }
 
+  if (questions.length === 0) {
+    return (
+      <>
+        <RunTopBar backTo="/play" backLabel="Quit run" />
+        <main className="flex flex-1 flex-col">
+          <Container className="py-14 sm:py-20">
+            <div className="mx-auto max-w-[34rem] rounded-lg border-2 border-border bg-surface p-7 sm:p-9">
+              <Text as="p" variant="subheading">
+                Questions unavailable
+              </Text>
+              <Text as="p" variant="small" className="mt-3 text-muted-foreground">
+                This passage has no quiz yet. Head back and pick another run.
+              </Text>
+              <Button size="lg" className="mt-7" arrow onClick={() => navigate('/play')}>
+                New run
+              </Button>
+            </div>
+          </Container>
+        </main>
+      </>
+    );
+  }
+
   const question = questions[index];
+  if (!question) {
+    return <Navigate to="/play" replace />;
+  }
   const answered = selections.filter((selection) => selection !== null).length;
   const isLast = index === total - 1;
 

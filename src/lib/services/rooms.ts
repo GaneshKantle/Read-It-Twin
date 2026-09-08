@@ -79,21 +79,11 @@ export async function createRoomAndJoin(
   return parseJoinResult(data);
 }
 
-/** Legacy helper — prefer createRoomAndJoin for lobbies. */
-export async function createRoom(passageId?: string | null): Promise<RoomRow> {
-  const client = getSupabaseClient();
-  const { data, error } = await client.rpc('create_room_with_code', {
-    p_passage_id: passageId ?? null,
+/** Legacy helper — revoked for anon clients in Phase 10. Prefer createRoomAndJoin. */
+export async function createRoom(_passageId?: string | null): Promise<RoomRow> {
+  throw new AppError('SUPABASE_UNAVAILABLE', {
+    message: 'create_room_with_code is not available to clients',
   });
-
-  if (error) {
-    throw fromSupabaseError(error, 'INSERT_FAILED');
-  }
-  if (!data) {
-    throw new AppError('INSERT_FAILED', { message: 'create_room_with_code returned no row' });
-  }
-
-  return data as RoomRow;
 }
 
 export async function getRoomByCode(roomCode: string): Promise<RoomRow> {
@@ -148,16 +138,9 @@ export async function getRoomById(roomId: string): Promise<RoomRow> {
   return data;
 }
 
-export async function expireRoom(roomId: string): Promise<RoomRow> {
-  const client = getSupabaseClient();
-  const { data, error } = await client.rpc('expire_room', { p_room_id: roomId });
-
-  if (error) {
-    throw fromSupabaseError(error, 'INVALID_ROOM');
-  }
-  if (!data) {
-    throw new AppError('INVALID_ROOM');
-  }
-
-  return data as RoomRow;
+/** Soft-close helper — revoked for anon clients in Phase 10. Rooms expire on read. */
+export async function expireRoom(_roomId: string): Promise<RoomRow> {
+  throw new AppError('SUPABASE_UNAVAILABLE', {
+    message: 'expire_room is not available to clients',
+  });
 }

@@ -7,14 +7,21 @@ import { MatchResultsScreen } from '@/components/room/MatchResultsScreen';
 import { RoomError } from '@/components/room/RoomError';
 import { Container } from '@/components/layout/Container';
 import { RunTopBar } from '@/components/run/RunTopBar';
+import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
+import { useDocumentMeta } from '@/hooks/useDocumentMeta';
 import { useRoomLobby } from '@/hooks/useRoomLobby';
-import { clearRoomSession } from '@/lib/session/playerSession';
 
 export function RoomPage() {
   const { roomCode = '' } = useParams();
   const navigate = useNavigate();
   const lobby = useRoomLobby(roomCode);
+
+  useDocumentMeta({
+    title: 'Join a race · Read It Twin',
+    description: 'Read faster. Understand more. Challenge a friend.',
+    robots: 'noindex,nofollow',
+  });
 
   const handleLeave = async () => {
     await lobby.handleLeave();
@@ -35,10 +42,32 @@ export function RoomPage() {
     lobby.passage &&
     (lobby.matchView === 'quiz' || lobby.matchView === 'quiz_waiting');
   const showResults = racing && lobby.matchView === 'results' && lobby.room;
+  const showConnectionBanner =
+    (lobby.phase === 'lobby' || lobby.phase === 'racing') &&
+    lobby.connectionHealth !== 'connected';
 
   return (
     <>
       <RunTopBar backTo="/" backLabel="Home" />
+      {showConnectionBanner ? (
+        <div
+          className="border-b-2 border-border bg-surface px-4 py-3"
+          role="status"
+          aria-live="polite"
+        >
+          <Container className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <Text as="p" variant="small" className="font-semibold">
+              {lobby.connectionHealth === 'reconnecting'
+                ? 'Connection interrupted. Recovering room state…'
+                : 'Live updates are delayed. Your session is still here.'}
+            </Text>
+            <Button size="sm" variant="ghost" onClick={lobby.retryConnection}>
+              Retry connection
+            </Button>
+          </Container>
+        </div>
+      ) : null}
+
       {lobby.phase === 'loading' ? (
         <main className="flex-1">
           <Container className="py-14 sm:py-20">
@@ -55,7 +84,9 @@ export function RoomPage() {
       ) : null}
 
       {lobby.phase === 'unavailable' || lobby.phase === 'error' ? (
-        lobby.error ? <RoomError error={lobby.error} /> : null
+        lobby.error ? (
+          <RoomError error={lobby.error} onRetry={lobby.retryBoot} />
+        ) : null
       ) : null}
 
       {lobby.phase === 'join' && lobby.room ? (
@@ -163,9 +194,4 @@ export function RoomPage() {
       ) : null}
     </>
   );
-}
-
-/** Clears a stale session when intentionally navigating away via invite-again flows. */
-export function resetRoomLocalSession(): void {
-  clearRoomSession();
 }

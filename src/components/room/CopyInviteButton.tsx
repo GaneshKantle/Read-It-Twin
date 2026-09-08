@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
+import { ShareAction } from '@/components/share/ShareAction';
+import { track } from '@/lib/analytics';
+import { buildInviteUrl, copyText, inviteShareMessage } from '@/lib/share';
 
 type CopyInviteButtonProps = {
   roomCode: string;
@@ -10,8 +13,7 @@ type CopyInviteButtonProps = {
 export function CopyInviteButton({ roomCode, disabled }: CopyInviteButtonProps) {
   const [copied, setCopied] = useState(false);
   const [fallback, setFallback] = useState(false);
-  const inviteUrl =
-    typeof window !== 'undefined' ? `${window.location.origin}/room/${roomCode}` : `/room/${roomCode}`;
+  const inviteUrl = buildInviteUrl(roomCode);
 
   useEffect(() => {
     if (!copied) {
@@ -22,27 +24,47 @@ export function CopyInviteButton({ roomCode, disabled }: CopyInviteButtonProps) 
   }, [copied]);
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(inviteUrl);
+    const result = await copyText(inviteUrl);
+    if (result.ok) {
       setCopied(true);
       setFallback(false);
-    } catch {
-      setFallback(true);
-      setCopied(false);
+      track('invite_copied', { method: 'clipboard' });
+      return;
     }
+    setFallback(true);
+    setCopied(false);
   };
 
   return (
     <div className="flex w-full flex-col gap-3">
-      <Button
-        size="lg"
-        variant="secondary"
-        className="w-full sm:w-auto"
-        disabled={disabled}
-        onClick={() => void handleCopy()}
-      >
-        {copied ? '✓ Copied' : 'Copy invite link'}
-      </Button>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+        <Button
+          size="lg"
+          variant="secondary"
+          className="w-full sm:w-auto"
+          disabled={disabled}
+          onClick={() => void handleCopy()}
+        >
+          {copied ? '✓ Copied' : 'Copy invite'}
+        </Button>
+        <ShareAction
+          payload={{
+            title: 'Read It Twin challenge',
+            text: inviteShareMessage(inviteUrl),
+            url: inviteUrl,
+          }}
+          shareLabel="Share challenge"
+          copyLabel="Share challenge"
+          analyticsEvent="invite_copied"
+          variant="ghost"
+          className="w-full sm:w-auto"
+          disabled={disabled}
+        />
+      </div>
+
+      <span className="sr-only" aria-live="polite">
+        {copied ? 'Invite link copied.' : ''}
+      </span>
 
       {fallback ? (
         <div className="rounded-lg border-2 border-border bg-surface p-4">

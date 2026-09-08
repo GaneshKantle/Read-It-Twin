@@ -1,8 +1,10 @@
 import { motion } from 'framer-motion';
+import { ShareAction } from '@/components/share/ShareAction';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { fadeUp } from '@/lib/motion';
 import type { RematchState } from '@/lib/rematch';
+import { resultShareMessage, type ShareOutcome } from '@/lib/share';
 
 type RematchActionsProps = {
   rematchState: RematchState;
@@ -16,6 +18,14 @@ type RematchActionsProps = {
   actionError: string | null;
   onRematch: () => void;
   onLeave: () => void;
+  share?: {
+    wpm: number;
+    comprehension: number;
+    score: number;
+    opponentScore?: number;
+    outcome: ShareOutcome;
+    personalBest?: boolean;
+  } | null;
 };
 
 export function RematchActions({
@@ -30,6 +40,7 @@ export function RematchActions({
   actionError,
   onRematch,
   onLeave,
+  share = null,
 }: RematchActionsProps) {
   const name = opponentNickname ?? 'Your opponent';
   const busy = pending || leavePending;
@@ -48,6 +59,20 @@ export function RematchActions({
   }
 
   const canRequest = rematchAvailable && !roomClosed && !selfRequested;
+  const shareText =
+    share != null
+      ? resultShareMessage({
+          mode: 'match',
+          wpm: share.wpm,
+          comprehension: share.comprehension,
+          score: share.score,
+          opponentScore: share.opponentScore,
+          outcome: share.outcome,
+          opponentName: opponentNickname,
+          personalBest: share.personalBest,
+        })
+      : null;
+  const homeUrl = typeof window !== 'undefined' ? window.location.origin : '';
 
   return (
     <motion.div variants={fadeUp} className="mt-8 space-y-4">
@@ -62,7 +87,7 @@ export function RematchActions({
         </Text>
       ) : null}
 
-      <div className="flex flex-col gap-3 sm:flex-row">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         {canRequest || (opponentRequested && !selfRequested) ? (
           <Button
             size="lg"
@@ -71,12 +96,28 @@ export function RematchActions({
             disabled={busy || !rematchAvailable || roomClosed}
             onClick={onRematch}
           >
-            RUN IT BACK
+            {pending ? 'Requested' : 'RUN IT BACK'}
           </Button>
         ) : selfRequested && !roomClosed ? (
           <Button size="lg" arrow className="w-full sm:w-auto" disabled>
-            RUN IT BACK
+            Requested
           </Button>
+        ) : null}
+
+        {shareText ? (
+          <ShareAction
+            payload={{
+              title: 'Read It Twin',
+              text: shareText,
+              url: homeUrl || undefined,
+            }}
+            shareLabel="Share result"
+            copyLabel="Share result"
+            analyticsEvent="result_shared"
+            variant="secondary"
+            className="w-full sm:w-auto"
+            disabled={busy}
+          />
         ) : null}
 
         <Button
@@ -86,7 +127,7 @@ export function RematchActions({
           disabled={busy}
           onClick={onLeave}
         >
-          Leave
+          {leavePending ? 'Leaving…' : 'Back home'}
         </Button>
       </div>
 

@@ -11,6 +11,8 @@ export type AppErrorCode =
   | 'INVALID_SESSION'
   | 'INVALID_NICKNAME'
   | 'DUPLICATE_ROOM_CODE'
+  | 'DUPLICATE_NICKNAME'
+  | 'RATE_LIMITED'
   | 'MISSING_PASSAGE'
   | 'MATCH_NOT_FOUND'
   | 'MATCH_NOT_ACTIVE'
@@ -26,15 +28,17 @@ export type AppErrorCode =
 
 const USER_MESSAGES: Record<AppErrorCode, string> = {
   SUPABASE_UNAVAILABLE: 'The game service is temporarily unavailable. Try again in a moment.',
-  INVALID_ROOM: "This room doesn't exist or may have expired.",
-  EXPIRED_ROOM: 'This room has expired. Start a new one to keep playing.',
-  ROOM_FULL: 'This race already has two players.',
+  INVALID_ROOM: "That room doesn't exist or has expired.",
+  EXPIRED_ROOM: 'Looks like this room expired.',
+  ROOM_FULL: 'That race is already full.',
   ROOM_CLOSED: 'This room is no longer open.',
   NOT_HOST: 'Only the host can start the race.',
   PLAYERS_NOT_READY: 'Both players need to be ready before starting.',
   INVALID_SESSION: 'Your session expired. Rejoin the room to continue.',
   INVALID_NICKNAME: 'Enter a nickname between 1 and 24 characters.',
   DUPLICATE_ROOM_CODE: 'That room code is already in use. Try creating the room again.',
+  DUPLICATE_NICKNAME: 'That nickname is already taken in this room. Pick another.',
+  RATE_LIMITED: 'Too many rooms created too quickly. Wait a few minutes and try again.',
   MISSING_PASSAGE: 'No passage was found for this run. Pick a different setup and try again.',
   MATCH_NOT_FOUND: 'This match could not be found. Return to the lobby and try again.',
   MATCH_NOT_ACTIVE: 'This match is not active anymore.',
@@ -46,7 +50,7 @@ const USER_MESSAGES: Record<AppErrorCode, string> = {
   DATABASE_TIMEOUT: 'The request took too long. Check your connection and try again.',
   INSERT_FAILED: 'Could not save that change. Please try again.',
   UPDATE_FAILED: 'Could not update that record. Please try again.',
-  UNKNOWN: 'Something went wrong. Please try again.',
+  UNKNOWN: 'Something went sideways. Try again.',
 };
 
 export class AppError extends Error {
@@ -126,6 +130,12 @@ export function fromSupabaseError(
   }
   if (code === 'P0015' || lower.includes('opponent left')) {
     return new AppError('OPPONENT_LEFT', { cause: error });
+  }
+  if (code === 'P0016' || lower.includes('rate limited')) {
+    return new AppError('RATE_LIMITED', { cause: error });
+  }
+  if (code === 'P0017' || lower.includes('nickname taken')) {
+    return new AppError('DUPLICATE_NICKNAME', { cause: error });
   }
 
   if (code === '23505' || lower.includes('duplicate')) {

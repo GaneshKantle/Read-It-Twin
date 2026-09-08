@@ -110,7 +110,10 @@ export function MatchReadingScreen({
               {opponentStatus}
             </Text>
             {finishedLocally ? (
-              <span className="rounded-full bg-accent px-3.5 py-1.5 text-[0.72rem] font-bold text-accent-foreground">
+              <span
+                className="rounded-full bg-accent px-3.5 py-1.5 text-[0.72rem] font-bold text-accent-foreground"
+                aria-live="polite"
+              >
                 ✓ Finished
               </span>
             ) : null}

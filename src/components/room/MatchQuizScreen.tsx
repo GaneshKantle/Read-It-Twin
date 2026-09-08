@@ -40,19 +40,14 @@ export function MatchQuizScreen({
   const total = questions.length;
   const opponentName = opponent?.nickname ?? 'opponent';
 
-  const [stage, setStage] = useState<QuizStage>(() =>
-    ownResult || view === 'quiz_waiting' ? 'waiting' : 'intro',
-  );
+  const [stage, setStage] = useState<QuizStage>('intro');
   const [index, setIndex] = useState(0);
   const [selections, setSelections] = useState<(number | null)[]>(() =>
     new Array(total).fill(null),
   );
 
-  useEffect(() => {
-    if (ownResult || view === 'quiz_waiting') {
-      setStage('waiting');
-    }
-  }, [ownResult, view]);
+  const effectiveStage: QuizStage =
+    ownResult || view === 'quiz_waiting' ? 'waiting' : stage;
 
   const selectAnswer = useCallback((questionIndex: number, optionIndex: number) => {
     setSelections((current) => {
@@ -88,7 +83,7 @@ export function MatchQuizScreen({
   }, [index, onSubmit, questions, quizPending, selections, total]);
 
   useEffect(() => {
-    if (stage !== 'question') {
+    if (effectiveStage !== 'question') {
       return;
     }
 
@@ -115,15 +110,15 @@ export function MatchQuizScreen({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleNext, index, selectAnswer, stage]);
+  }, [effectiveStage, handleNext, index, selectAnswer]);
 
   useEffect(() => {
-    if (stage === 'question') {
+    if (effectiveStage === 'question') {
       window.scrollTo(0, 0);
     }
-  }, [index, stage]);
+  }, [effectiveStage, index]);
 
-  if (stage === 'waiting') {
+  if (effectiveStage === 'waiting') {
     return (
       <main className="flex flex-1 flex-col">
         <Container className="py-10 sm:py-16">
@@ -156,7 +151,7 @@ export function MatchQuizScreen({
   return (
     <>
       <main className="flex flex-1 flex-col">
-        {stage === 'intro' ? (
+        {effectiveStage === 'intro' ? (
           <QuizIntro
             questionCount={total}
             passageTitle={passage.title}
@@ -204,7 +199,9 @@ export function MatchQuizScreen({
         )}
       </main>
 
-      <AnimatePresence>{stage === 'scoring' ? <ScoringOverlay key="scoring" /> : null}</AnimatePresence>
+      <AnimatePresence>
+        {effectiveStage === 'scoring' ? <ScoringOverlay key="scoring" /> : null}
+      </AnimatePresence>
     </>
   );
 }

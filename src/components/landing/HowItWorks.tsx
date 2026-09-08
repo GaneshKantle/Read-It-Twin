@@ -28,8 +28,8 @@ const steps = [
     tone: 'bg-yellow',
   },
   {
-    title: 'See who won',
-    body: 'Speed multiplied by comprehension gives one score, plus every answer you missed.',
+    title: 'See your score',
+    body: 'Speed multiplied by comprehension gives one score, plus every answer you missed. Then challenge a friend.',
     icon: Trophy,
     tone: 'bg-periwinkle',
   },

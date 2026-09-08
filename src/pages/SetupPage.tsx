@@ -7,7 +7,9 @@ import { RunTopBar } from '@/components/run/RunTopBar';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { categoryOptions, difficultyOptions } from '@/data/runOptions';
+import { useDocumentMeta } from '@/hooks/useDocumentMeta';
 import { useRun } from '@/hooks/useRun';
+import { track } from '@/lib/analytics';
 import { formatMinutes } from '@/lib/reading';
 import { fadeUp, motionEase, motionTiming, staggerContainer } from '@/lib/motion';
 import { getPoolEstimate } from '@/lib/services/passageRepository';
@@ -40,6 +42,12 @@ export function SetupPage() {
   const navigate = useNavigate();
   const { config, setDifficulty, setCategory, startRun, loading } = useRun();
 
+  useDocumentMeta({
+    title: 'Solo run · Read It Twin',
+    description: 'Pick a passage, race the clock, and see how much you actually understood.',
+    robots: 'index,follow',
+  });
+
   const estimate = useMemo(
     () => getPoolEstimate(config.difficulty, config.category),
     [config.category, config.difficulty],
@@ -51,6 +59,7 @@ export function SetupPage() {
     }
 
     await startRun();
+    track('solo_started');
     navigate('/play/read');
   };
 

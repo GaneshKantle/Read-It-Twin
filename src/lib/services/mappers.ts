@@ -40,12 +40,12 @@ export function isPassageQuestion(
 
 export function withAnswerIndexes(
   questions: Array<PublicPassageQuestion | PassageQuestion>,
-  grades: { questionId: string; correctAnswerIndex: number }[],
+  grades: { questionId: string; correctAnswerIndex?: number }[],
 ): PassageQuestion[] {
   return questions.map((question) => {
     const grade = grades.find((item) => item.questionId === question.id);
     const answerIndex =
-      grade?.correctAnswerIndex ??
+      (typeof grade?.correctAnswerIndex === 'number' ? grade.correctAnswerIndex : undefined) ??
       (isPassageQuestion(question) ? question.answerIndex : 0);
 
     return {

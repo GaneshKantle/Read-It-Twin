@@ -37,6 +37,12 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground transition-colors duration-base ease-fluid">
+      <a
+        href="#main-content"
+        className="absolute left-4 top-4 z-[60] -translate-y-[200%] rounded-full bg-accent px-4 py-2 text-label font-bold text-accent-foreground transition-transform focus:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+      >
+        Skip to content
+      </a>
       <header className="fixed inset-x-0 top-0 z-50">
         <Container className="flex items-center justify-between gap-3 py-3 sm:py-4">
           <Link
@@ -98,7 +104,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       </header>
 
       {/* No top padding: the candy sections run under the floating header. */}
-      <main className="flex-1">{children}</main>
+      <main id="main-content" className="flex-1">
+        {children}
+      </main>
       <Footer />
     </div>
   );

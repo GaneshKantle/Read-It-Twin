@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/cn';
 import { motionEase, motionTiming } from '@/lib/motion';
+import { calculateFinalScore } from '@/lib/scoring';
 
 /** Fastest plausible pace used to scale the speed bars. Visual only. */
 const PACE_CEILING = 420;
@@ -23,7 +24,7 @@ export function ScoreCard({
   winner = false,
   className,
 }: ScoreCardProps) {
-  const score = Math.round(wpm * (comprehension / 100));
+  const score = calculateFinalScore(wpm, comprehension);
 
   return (
     <div

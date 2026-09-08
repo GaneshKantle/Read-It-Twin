@@ -18,33 +18,42 @@ export function useRaceElapsed(
 
   useEffect(() => {
     if (frozenMs != null) {
-      setElapsedMs(frozenMs);
-      return;
+      const frame = window.requestAnimationFrame(() => {
+        setElapsedMs(frozenMs);
+      });
+      return () => window.cancelAnimationFrame(frame);
     }
 
     if (!raceStartAt) {
-      setElapsedMs(0);
-      return;
+      const frame = window.requestAnimationFrame(() => {
+        setElapsedMs(0);
+      });
+      return () => window.cancelAnimationFrame(frame);
     }
 
     const startMs = Date.parse(raceStartAt);
     if (Number.isNaN(startMs)) {
-      setElapsedMs(0);
-      return;
+      const frame = window.requestAnimationFrame(() => {
+        setElapsedMs(0);
+      });
+      return () => window.cancelAnimationFrame(frame);
     }
 
-    const compute = () => Math.max(0, syncedNow(clockOffsetMs) - startMs);
-    setElapsedMs(compute());
+    const update = () => {
+      setElapsedMs(Math.max(0, syncedNow(clockOffsetMs) - startMs));
+    };
+
+    const frame = window.requestAnimationFrame(update);
 
     if (!running) {
-      return;
+      return () => window.cancelAnimationFrame(frame);
     }
 
-    const interval = window.setInterval(() => {
-      setElapsedMs(compute());
-    }, TICK_MS);
-
-    return () => window.clearInterval(interval);
+    const interval = window.setInterval(update, TICK_MS);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearInterval(interval);
+    };
   }, [clockOffsetMs, frozenMs, raceStartAt, running]);
 
   return elapsedMs;

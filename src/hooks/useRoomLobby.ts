@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { track } from '@/lib/analytics';
 import { getClockOffsetMs } from '@/lib/clockSync';
 import { matchDebug } from '@/lib/debug/matchDebug';
 import { resolveMatchView } from '@/lib/matchView';
@@ -60,7 +61,10 @@ export type LobbyError = {
   opponentName?: string;
 };
 
+export type ConnectionHealth = 'connected' | 'reconnecting' | 'degraded';
+
 const RACE_STATUSES = new Set(['countdown', 'reading', 'quiz', 'results']);
+const BOOT_TIMEOUT_MS = 12_000;
 
 function errorFromAppError(error: AppError): LobbyError {
   switch (error.code) {
@@ -68,13 +72,13 @@ function errorFromAppError(error: AppError): LobbyError {
       return {
         kind: 'full',
         title: 'ROOM FULL',
-        message: 'This race already has two players.',
+        message: 'That race is already full.',
       };
     case 'EXPIRED_ROOM':
       return {
         kind: 'expired',
         title: 'THIS ROOM EXPIRED',
-        message: 'This room has expired. Start a new one to keep playing.',
+        message: 'Looks like this room expired.',
       };
     case 'ROOM_CLOSED':
       return {
@@ -86,7 +90,7 @@ function errorFromAppError(error: AppError): LobbyError {
       return {
         kind: 'not_found',
         title: 'ROOM NOT FOUND',
-        message: "This room doesn't exist or may have expired.",
+        message: "That room doesn't exist or has expired.",
       };
     case 'SUPABASE_UNAVAILABLE':
       return {
@@ -98,7 +102,7 @@ function errorFromAppError(error: AppError): LobbyError {
       return {
         kind: 'network',
         title: 'SOMETHING WENT WRONG',
-        message: error.userMessage,
+        message: error.userMessage || 'Something went sideways. Try again.',
       };
   }
 }
@@ -140,6 +144,8 @@ export function useRoomLobby(roomCodeParam: string) {
   const [leftOpponentName, setLeftOpponentName] = useState<string | null>(null);
   const [focusLossCount, setFocusLossCount] = useState(0);
   const [passageLoading, setPassageLoading] = useState(false);
+  const [connectionHealth, setConnectionHealth] = useState<ConnectionHealth>('connected');
+  const [bootNonce, setBootNonce] = useState(0);
 
   const sessionRef = useRef<RoomSession | null>(null);
   const playersRef = useRef<PlayerRow[]>([]);
@@ -148,6 +154,15 @@ export function useRoomLobby(roomCodeParam: string) {
   const refreshingRef = useRef(false);
   const ackSentRef = useRef<string | null>(null);
   const passageIdRef = useRef<string | null>(null);
+  const actionLockRef = useRef({
+    join: false,
+    ready: false,
+    start: false,
+    leave: false,
+    finish: false,
+    quiz: false,
+    rematch: false,
+  });
 
   useEffect(() => {
     sessionRef.current = session;
@@ -324,7 +339,7 @@ export function useRoomLobby(roomCodeParam: string) {
         setError({
           kind: 'not_found',
           title: 'ROOM NOT FOUND',
-          message: "This room doesn't exist or may have expired.",
+          message: "That room doesn't exist or has expired.",
         });
         setPhase('error');
         return;
@@ -338,7 +353,7 @@ export function useRoomLobby(roomCodeParam: string) {
         setError({
           kind: 'expired',
           title: 'THIS ROOM EXPIRED',
-          message: 'This room has expired. Start a new one to keep playing.',
+          message: 'Looks like this room expired.',
         });
         setPhase('error');
         return;
@@ -421,6 +436,7 @@ export function useRoomLobby(roomCodeParam: string) {
   // Initial load
   useEffect(() => {
     let cancelled = false;
+    let timedOut = false;
 
     async function boot() {
       if (!isSupabaseConfigured()) {
@@ -437,7 +453,7 @@ export function useRoomLobby(roomCodeParam: string) {
         setError({
           kind: 'not_found',
           title: 'ROOM NOT FOUND',
-          message: "This room doesn't exist or may have expired.",
+          message: "That room doesn't exist or has expired.",
         });
         setPhase('error');
         return;
@@ -446,15 +462,30 @@ export function useRoomLobby(roomCodeParam: string) {
       setPhase('loading');
       setError(null);
       setActionError(null);
+      setConnectionHealth('connected');
+
+      const timeoutId = window.setTimeout(() => {
+        if (cancelled) {
+          return;
+        }
+        timedOut = true;
+        setError({
+          kind: 'network',
+          title: 'CONNECTION SLOW',
+          message: 'Loading this room took too long. Check your connection and try again.',
+        });
+        setPhase('error');
+      }, BOOT_TIMEOUT_MS);
 
       try {
         await getServerTime().catch(() => undefined);
-        if (!cancelled) {
-          syncClockOffset();
+        if (cancelled || timedOut) {
+          return;
         }
+        syncClockOffset();
 
         const lookup = await lookupRoomByCode(roomCode);
-        if (cancelled) {
+        if (cancelled || timedOut) {
           return;
         }
 
@@ -462,7 +493,7 @@ export function useRoomLobby(roomCodeParam: string) {
           setError({
             kind: 'not_found',
             title: 'ROOM NOT FOUND',
-            message: "This room doesn't exist or may have expired.",
+            message: "That room doesn't exist or has expired.",
           });
           setPhase('error');
           return;
@@ -474,7 +505,7 @@ export function useRoomLobby(roomCodeParam: string) {
           setError({
             kind: 'expired',
             title: 'THIS ROOM EXPIRED',
-            message: 'This room has expired. Start a new one to keep playing.',
+            message: 'Looks like this room expired.',
           });
           setPhase('error');
           return;
@@ -483,6 +514,9 @@ export function useRoomLobby(roomCodeParam: string) {
         if (lookup.state === 'closed' && !isRaceStatus(lookup.room.status)) {
           const existingForClosed = getSessionForRoom(roomCode);
           const closedPlayers = await getPlayersForRoom(lookup.room.id);
+          if (cancelled || timedOut) {
+            return;
+          }
           if (
             existingForClosed &&
             closedPlayers.some((player) => player.id === existingForClosed.playerId)
@@ -496,7 +530,9 @@ export function useRoomLobby(roomCodeParam: string) {
               await loadPassageForMatch(completed);
               await loadOwnResult(completed.id, existingForClosed.playerId);
               await loadAllResults(completed.id);
-              setPhase('racing');
+              if (!cancelled && !timedOut) {
+                setPhase('racing');
+              }
               return;
             }
           }
@@ -511,7 +547,7 @@ export function useRoomLobby(roomCodeParam: string) {
 
         const existing = getSessionForRoom(roomCode);
         const playerList = await getPlayersForRoom(lookup.room.id);
-        if (cancelled) {
+        if (cancelled || timedOut) {
           return;
         }
         setPlayers(playerList);
@@ -521,7 +557,7 @@ export function useRoomLobby(roomCodeParam: string) {
 
           if (isRaceStatus(lookup.room.status)) {
             const latest = await resolveMatchForRoomStatus(lookup.room);
-            if (!cancelled) {
+            if (!cancelled && !timedOut) {
               setMatch(latest);
               matchRef.current = latest;
               await loadPassageForMatch(latest);
@@ -542,11 +578,15 @@ export function useRoomLobby(roomCodeParam: string) {
             setOwnResult(null);
             setMatchResults([]);
             await loadPassageById(lookup.room.passage_id);
-            setPhase('lobby');
+            if (!cancelled && !timedOut) {
+              setPhase('lobby');
+            }
             return;
           }
 
-          setPhase('lobby');
+          if (!cancelled && !timedOut) {
+            setPhase('lobby');
+          }
           return;
         }
 
@@ -576,12 +616,14 @@ export function useRoomLobby(roomCodeParam: string) {
 
         setPhase('join');
       } catch (err) {
-        if (cancelled) {
+        if (cancelled || timedOut) {
           return;
         }
         const appError = toAppError(err);
         setError(errorFromAppError(appError));
         setPhase('error');
+      } finally {
+        window.clearTimeout(timeoutId);
       }
     }
 
@@ -590,6 +632,7 @@ export function useRoomLobby(roomCodeParam: string) {
       cancelled = true;
     };
   }, [
+    bootNonce,
     loadAllResults,
     loadOwnResult,
     loadPassageById,
@@ -601,11 +644,12 @@ export function useRoomLobby(roomCodeParam: string) {
 
   // Realtime while in lobby or racing
   useEffect(() => {
-    if ((phase !== 'lobby' && phase !== 'racing') || !room) {
+    const currentRoom = roomRef.current;
+    if ((phase !== 'lobby' && phase !== 'racing') || !currentRoom) {
       return;
     }
 
-    const unsubscribe = subscribeToRoom(room.id, {
+    const unsubscribe = subscribeToRoom(currentRoom.id, {
       onRoomChange: (nextRoom) => {
         const previousStatus = roomRef.current?.status;
         setRoom(nextRoom);
@@ -615,7 +659,7 @@ export function useRoomLobby(roomCodeParam: string) {
           setError({
             kind: 'expired',
             title: 'THIS ROOM EXPIRED',
-            message: 'This room has expired. Start a new one to keep playing.',
+            message: 'Looks like this room expired.',
           });
           setPhase('error');
           return;
@@ -710,10 +754,28 @@ export function useRoomLobby(roomCodeParam: string) {
         void refreshSnapshot();
       },
       onSubscribed: () => {
+        setConnectionHealth('connected');
         void refreshSnapshot();
       },
+      onStatus: (status) => {
+        if (status === 'SUBSCRIBED') {
+          setConnectionHealth('connected');
+          return;
+        }
+        if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+          setConnectionHealth('reconnecting');
+          void refreshSnapshot().finally(() => {
+            setConnectionHealth((current) =>
+              current === 'reconnecting' ? 'degraded' : current,
+            );
+          });
+        }
+      },
       onError: () => {
-        void refreshSnapshot();
+        setConnectionHealth('reconnecting');
+        void refreshSnapshot().finally(() => {
+          setConnectionHealth((current) => (current === 'reconnecting' ? 'degraded' : current));
+        });
       },
     });
 
@@ -822,9 +884,10 @@ export function useRoomLobby(roomCodeParam: string) {
 
   const handleJoin = useCallback(
     async (nickname: string) => {
-      if (pending.join || !room) {
+      if (pending.join || actionLockRef.current.join || !room) {
         return;
       }
+      actionLockRef.current.join = true;
       setPending((prev) => ({ ...prev, join: true }));
       setActionError(null);
       try {
@@ -842,6 +905,7 @@ export function useRoomLobby(roomCodeParam: string) {
         await refreshPlayers(result.room.id);
         setLeftOpponentName(null);
         setPhase('lobby');
+        track('room_joined');
       } catch (err) {
         const appError = toAppError(err);
         if (
@@ -856,6 +920,7 @@ export function useRoomLobby(roomCodeParam: string) {
           setActionError(appError.userMessage);
         }
       } finally {
+        actionLockRef.current.join = false;
         setPending((prev) => ({ ...prev, join: false }));
       }
     },
@@ -865,9 +930,10 @@ export function useRoomLobby(roomCodeParam: string) {
   const handleToggleReady = useCallback(async () => {
     const current = sessionRef.current;
     const self = selfPlayer;
-    if (!current || !self || !canToggleReady || pending.ready) {
+    if (!current || !self || !canToggleReady || pending.ready || actionLockRef.current.ready) {
       return;
     }
+    actionLockRef.current.ready = true;
     setPending((prev) => ({ ...prev, ready: true }));
     setActionError(null);
     try {
@@ -878,15 +944,17 @@ export function useRoomLobby(roomCodeParam: string) {
       const appError = toAppError(err);
       setActionError(appError.userMessage);
     } finally {
+      actionLockRef.current.ready = false;
       setPending((prev) => ({ ...prev, ready: false }));
     }
   }, [canToggleReady, pending.ready, refreshPlayers, selfPlayer]);
 
   const handleStart = useCallback(async () => {
     const current = sessionRef.current;
-    if (!current || !canStart || !room) {
+    if (!current || !canStart || !room || actionLockRef.current.start) {
       return;
     }
+    actionLockRef.current.start = true;
     setPending((prev) => ({ ...prev, start: true }));
     setActionError(null);
     try {
@@ -901,19 +969,22 @@ export function useRoomLobby(roomCodeParam: string) {
       ackSentRef.current = null;
       setPhase('racing');
       await refreshPlayers(result.room.id);
+      track('race_started');
     } catch (err) {
       const appError = toAppError(err);
       setActionError(appError.userMessage);
     } finally {
+      actionLockRef.current.start = false;
       setPending((prev) => ({ ...prev, start: false }));
     }
   }, [canStart, loadPassageForMatch, refreshPlayers, room, syncClockOffset]);
 
   const handleLeave = useCallback(async () => {
     const current = sessionRef.current;
-    if (!current || pending.leave) {
+    if (!current || pending.leave || actionLockRef.current.leave) {
       return;
     }
+    actionLockRef.current.leave = true;
     setPending((prev) => ({ ...prev, leave: true }));
     try {
       const currentRoom = roomRef.current;
@@ -941,15 +1012,17 @@ export function useRoomLobby(roomCodeParam: string) {
         setSession(null);
       }
     } finally {
+      actionLockRef.current.leave = false;
       setPending((prev) => ({ ...prev, leave: false }));
     }
   }, [pending.leave]);
 
   const handleRequestRematch = useCallback(async () => {
     const current = sessionRef.current;
-    if (!current || pending.rematch) {
+    if (!current || pending.rematch || actionLockRef.current.rematch) {
       return;
     }
+    actionLockRef.current.rematch = true;
     setPending((prev) => ({ ...prev, rematch: true }));
     setActionError(null);
     try {
@@ -967,11 +1040,15 @@ export function useRoomLobby(roomCodeParam: string) {
         setFocusLossCount(0);
         setPhase('lobby');
         await loadPassageById(result.room.passage_id);
+        track('rematch_completed');
+      } else {
+        track('rematch_requested');
       }
     } catch (err) {
       const appError = toAppError(err);
       setActionError(appError.userMessage);
     } finally {
+      actionLockRef.current.rematch = false;
       setPending((prev) => ({ ...prev, rematch: false }));
     }
   }, [loadPassageById, pending.rematch]);
@@ -979,9 +1056,16 @@ export function useRoomLobby(roomCodeParam: string) {
   const handleFinishReading = useCallback(async () => {
     const current = sessionRef.current;
     const currentMatch = matchRef.current;
-    if (!current || !currentMatch || pending.finish || selfPlayer?.finished) {
+    if (
+      !current ||
+      !currentMatch ||
+      pending.finish ||
+      actionLockRef.current.finish ||
+      selfPlayer?.finished
+    ) {
       return;
     }
+    actionLockRef.current.finish = true;
     setPending((prev) => ({ ...prev, finish: true }));
     setActionError(null);
     try {
@@ -998,6 +1082,7 @@ export function useRoomLobby(roomCodeParam: string) {
       const appError = toAppError(err);
       setActionError(appError.userMessage);
     } finally {
+      actionLockRef.current.finish = false;
       setPending((prev) => ({ ...prev, finish: false }));
     }
   }, [pending.finish, refreshPlayers, selfPlayer?.finished, syncClockOffset]);
@@ -1006,9 +1091,10 @@ export function useRoomLobby(roomCodeParam: string) {
     async (answers: { questionId: string; selectedIndex: number | null }[]) => {
       const current = sessionRef.current;
       const currentMatch = matchRef.current;
-      if (!current || !currentMatch || pending.quiz || ownResult) {
+      if (!current || !currentMatch || pending.quiz || actionLockRef.current.quiz || ownResult) {
         return ownResult;
       }
+      actionLockRef.current.quiz = true;
       setPending((prev) => ({ ...prev, quiz: true }));
       setActionError(null);
       try {
@@ -1023,8 +1109,10 @@ export function useRoomLobby(roomCodeParam: string) {
         setOwnResult(result.result);
         syncClockOffset();
         await refreshPlayers(result.room.id);
+        track('quiz_completed', { mode: 'match' });
         if (result.room.status === 'results' || result.match?.status === 'results') {
           await loadAllResults(currentMatch.id);
+          track('race_completed');
         }
         return result.result;
       } catch (err) {
@@ -1032,6 +1120,7 @@ export function useRoomLobby(roomCodeParam: string) {
         setActionError(appError.userMessage);
         throw appError;
       } finally {
+        actionLockRef.current.quiz = false;
         setPending((prev) => ({ ...prev, quiz: false }));
       }
     },
@@ -1046,14 +1135,28 @@ export function useRoomLobby(roomCodeParam: string) {
     setLeftOpponentName(null);
   }, []);
 
+  const retryBoot = useCallback(() => {
+    setError(null);
+    setActionError(null);
+    setPhase('loading');
+    setBootNonce((value) => value + 1);
+  }, []);
+
+  const retryConnection = useCallback(() => {
+    setConnectionHealth('reconnecting');
+    void refreshSnapshot().finally(() => {
+      setConnectionHealth('connected');
+    });
+  }, [refreshSnapshot]);
+
   const handleCountdownComplete = useCallback(() => {
     const current = sessionRef.current;
     const currentRoom = roomRef.current;
     const currentMatch = matchRef.current;
-    if (!current || !currentRoom || !currentMatch) {
+    if (!current || !currentRoom || !currentMatch?.race_start_at) {
       return;
     }
-    const key = `${currentMatch.id}:ack`;
+    const key = `${currentMatch.id}:${currentMatch.race_start_at}`;
     if (ackSentRef.current === key) {
       return;
     }
@@ -1086,6 +1189,7 @@ export function useRoomLobby(roomCodeParam: string) {
     error,
     actionError,
     pending,
+    connectionHealth,
     hostPlayer,
     selfPlayer,
     opponent,
@@ -1105,5 +1209,7 @@ export function useRoomLobby(roomCodeParam: string) {
     handleCountdownComplete,
     registerFocusLoss,
     dismissOpponentLeft,
+    retryBoot,
+    retryConnection,
   };
 }

@@ -9,10 +9,23 @@ import type { LobbyError } from '@/hooks/useRoomLobby';
 type RoomErrorProps = {
   error: LobbyError;
   onInviteAgain?: () => void;
+  onRetry?: () => void;
 };
 
-export function RoomError({ error, onInviteAgain }: RoomErrorProps) {
+const CREATE_NEW_RACE_KINDS: LobbyError['kind'][] = [
+  'expired',
+  'not_found',
+  'closed',
+  'host_left',
+];
+
+export function RoomError({ error, onInviteAgain, onRetry }: RoomErrorProps) {
   const navigate = useNavigate();
+  const canRetry = Boolean(onRetry) && (error.kind === 'network' || error.kind === 'not_found');
+  const canCreateNew = CREATE_NEW_RACE_KINDS.includes(error.kind);
+  const showInviteAgain =
+    Boolean(onInviteAgain) && (error.kind === 'opponent_left' || error.kind === 'full');
+  const hasPrimary = canRetry || showInviteAgain || canCreateNew;
 
   return (
     <Container className="py-14 sm:py-20">
@@ -31,16 +44,31 @@ export function RoomError({ error, onInviteAgain }: RoomErrorProps) {
           </Text>
         </motion.div>
 
-        <motion.div variants={fadeUp} className="mt-7 flex flex-col gap-3 sm:flex-row">
-          {onInviteAgain && (error.kind === 'opponent_left' || error.kind === 'full') ? (
+        <motion.div variants={fadeUp} className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          {canRetry ? (
+            <Button size="lg" arrow className="w-full sm:w-auto" onClick={onRetry}>
+              Try again
+            </Button>
+          ) : null}
+          {showInviteAgain ? (
             <Button size="lg" arrow className="w-full sm:w-auto" onClick={onInviteAgain}>
               Invite again
             </Button>
           ) : null}
+          {canCreateNew ? (
+            <Button
+              size="lg"
+              arrow
+              className="w-full sm:w-auto"
+              onClick={() => navigate('/challenge')}
+            >
+              Create new race
+            </Button>
+          ) : null}
           <Button
             size="lg"
-            variant={onInviteAgain ? 'ghost' : 'primary'}
-            arrow={!onInviteAgain}
+            variant={hasPrimary ? 'ghost' : 'primary'}
+            arrow={!hasPrimary}
             className="w-full sm:w-auto"
             onClick={() => navigate('/')}
           >

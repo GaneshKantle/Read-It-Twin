@@ -13,21 +13,27 @@ export function useElapsedTime(startedPerf: number | null, running: boolean): nu
 
   useEffect(() => {
     if (startedPerf === null) {
-      setElapsedMs(0);
-      return;
+      const frame = window.requestAnimationFrame(() => {
+        setElapsedMs(0);
+      });
+      return () => window.cancelAnimationFrame(frame);
     }
 
-    setElapsedMs(performance.now() - startedPerf);
+    const update = () => {
+      setElapsedMs(Math.max(0, performance.now() - startedPerf));
+    };
+
+    const frame = window.requestAnimationFrame(update);
 
     if (!running) {
-      return;
+      return () => window.cancelAnimationFrame(frame);
     }
 
-    const interval = window.setInterval(() => {
-      setElapsedMs(performance.now() - startedPerf);
-    }, TICK_MS);
-
-    return () => window.clearInterval(interval);
+    const interval = window.setInterval(update, TICK_MS);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearInterval(interval);
+    };
   }, [running, startedPerf]);
 
   return elapsedMs;

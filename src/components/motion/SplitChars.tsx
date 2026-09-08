@@ -29,7 +29,6 @@ const charVariants = {
  */
 export function SplitChars({ text, as = 'p', className, stagger = 0.016, delay = 0 }: SplitCharsProps) {
   const prefersReducedMotion = useReducedMotion();
-  const MotionTag = useMemo(() => motion.create(as as 'p'), [as]);
   const words = useMemo(() => text.split(' '), [text]);
 
   if (prefersReducedMotion) {
@@ -41,7 +40,7 @@ export function SplitChars({ text, as = 'p', className, stagger = 0.016, delay =
   let charIndex = -1;
 
   return (
-    <MotionTag
+    <motion.p
       className={cn('inline-block', className)}
       aria-label={text}
       initial="initial"
@@ -67,6 +66,6 @@ export function SplitChars({ text, as = 'p', className, stagger = 0.016, delay =
           {wordIndex < words.length - 1 && ' '}
         </span>
       ))}
-    </MotionTag>
+    </motion.p>
   );
 }

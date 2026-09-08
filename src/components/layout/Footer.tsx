@@ -53,14 +53,24 @@ export function Footer() {
               ))}
             </ul>
 
-            <Button
-              size="lg"
-              arrow
-              className="mt-8 w-full sm:w-auto"
-              onClick={() => navigate('/play')}
-            >
-              Start reading
-            </Button>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Button
+                size="lg"
+                arrow
+                className="w-full sm:w-auto"
+                onClick={() => navigate('/play')}
+              >
+                Start reading
+              </Button>
+              <Button
+                size="lg"
+                variant="ghost"
+                className="w-full border-ink text-ink hover:bg-ink/10 sm:w-auto"
+                onClick={() => navigate('/challenge')}
+              >
+                Challenge a friend
+              </Button>
+            </div>
           </div>
 
           <motion.div
