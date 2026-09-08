@@ -49,15 +49,15 @@ Set the same two variables in the Vercel project environment. Hosting uses [`ver
 
 Apply schema + seed and read security notes in [docs/database.md](docs/database.md).
 
-Migration order (repo files):
+Migration order (repo files; versions match remote `schema_migrations`):
 
-1. `20260905143000_phase06_foundation.sql`
-2. `20260906120000_phase07_lobby.sql`
-3. `20260906210000_phase08_race.sql`
-4. `20260907140000_phase09_results_rematch.sql`
-5. `20260908120000_phase10_hardening.sql`
-6. `20260908121000_phase10_revoke_rls_auto_enable.sql`
-7. `20260908122000_phase10_questions_public_access.sql`
+1. `20260906153610_phase06_foundation.sql`
+2. `20260906153706_phase07_lobby_schema.sql` through `20260906154628_phase07_fix_generate_room_code_search_path.sql`
+3. `20260906165115_phase08_race.sql` through `20260906170008_phase08_fix_submit_quiz_ambiguity.sql`
+4. `20260907090859_phase09_results_rematch.sql` through `20260907091153_phase09_start_match_clear_rematch.sql`
+5. `20260908083927_phase10_hardening.sql`
+6. `20260908083947_phase10_revoke_rls_auto_enable.sql`
+7. `20260908085424_phase10_questions_public_access.sql`
 8. `supabase/seed.sql`
 
 ## Product routes

@@ -5,9 +5,6 @@
 -- - Lightweight create-room rate limit
 -- - questions_public as security_invoker
 
--- ---------------------------------------------------------------------------
--- questions_public: security_invoker so the view respects underlying RLS
--- ---------------------------------------------------------------------------
 drop view if exists public.questions_public;
 
 create view public.questions_public
@@ -24,9 +21,6 @@ from public.questions;
 
 grant select on public.questions_public to anon, authenticated;
 
--- ---------------------------------------------------------------------------
--- grade_passage_answers: block mid-match cheating; reveal keys only on full submit
--- ---------------------------------------------------------------------------
 create or replace function public.grade_passage_answers(
   p_passage_id uuid,
   p_answers jsonb
@@ -52,7 +46,6 @@ begin
     raise exception 'Passage not found' using errcode = 'P0002';
   end if;
 
-  -- Multiplayer races grade only through submit_match_quiz.
   select exists (
     select 1
     from public.matches m
@@ -101,7 +94,6 @@ begin
     );
   end loop;
 
-  -- Solo answer review may reveal keys only after every question was answered.
   reveal_keys := total_count > 0 and answered_count = total_count;
 
   if reveal_keys then
@@ -146,9 +138,6 @@ begin
 end;
 $$;
 
--- ---------------------------------------------------------------------------
--- create_room_and_join: nickname trim already; add rate limit
--- ---------------------------------------------------------------------------
 create or replace function public.create_room_and_join(
   p_nickname text,
   p_client_id uuid
@@ -209,9 +198,6 @@ begin
 end;
 $$;
 
--- ---------------------------------------------------------------------------
--- join_room: reject duplicate nicknames (case-insensitive) for other seats
--- ---------------------------------------------------------------------------
 create or replace function public.join_room(
   p_room_code text,
   p_nickname text,
@@ -363,14 +349,7 @@ begin
 end;
 $$;
 
--- ---------------------------------------------------------------------------
--- Revoke dangerous / internal RPCs from public clients
--- ---------------------------------------------------------------------------
 revoke all on function public.expire_room(uuid) from public, anon, authenticated;
 revoke all on function public.create_room_with_code(uuid) from public, anon, authenticated;
 revoke all on function public.assert_room_active(uuid) from public, anon, authenticated;
 revoke all on function public.generate_room_code() from public, anon, authenticated;
-revoke all on function public.rls_auto_enable() from public, anon, authenticated;
-
--- Keep generate_room_code callable by definer functions (owner), not by clients.
--- expire_room / create_room_with_code remain for service role / owners only.

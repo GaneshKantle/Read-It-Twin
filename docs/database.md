@@ -16,14 +16,8 @@ If either value is empty, the solo app uses local passage seeds and does not cal
 ## Apply migrations
 
 1. Open the Supabase SQL editor (or use the Supabase CLI).
-2. Run [`supabase/migrations/20260905143000_phase06_foundation.sql`](../supabase/migrations/20260905143000_phase06_foundation.sql).
-3. Run [`supabase/migrations/20260906120000_phase07_lobby.sql`](../supabase/migrations/20260906120000_phase07_lobby.sql).
-4. Run [`supabase/migrations/20260906210000_phase08_race.sql`](../supabase/migrations/20260906210000_phase08_race.sql).
-5. Run [`supabase/migrations/20260907140000_phase09_results_rematch.sql`](../supabase/migrations/20260907140000_phase09_results_rematch.sql).
-6. Run [`supabase/migrations/20260908120000_phase10_hardening.sql`](../supabase/migrations/20260908120000_phase10_hardening.sql).
-7. Run [`supabase/migrations/20260908121000_phase10_revoke_rls_auto_enable.sql`](../supabase/migrations/20260908121000_phase10_revoke_rls_auto_enable.sql).
-8. Run [`supabase/migrations/20260908122000_phase10_questions_public_access.sql`](../supabase/migrations/20260908122000_phase10_questions_public_access.sql).
-9. Run [`supabase/seed.sql`](../supabase/seed.sql).
+2. Apply every file in [`supabase/migrations`](../supabase/migrations) in timestamp order (19 files; versions match remote `schema_migrations`).
+3. Run [`supabase/seed.sql`](../supabase/seed.sql).
 
 To regenerate the seed from local passages:
 
