@@ -24,6 +24,7 @@ type LobbyPanelProps = {
   };
   actionError: string | null;
   opponentEmptyLabel?: string;
+  waitingForHost?: boolean;
   onToggleReady: () => void;
   onStart: () => void;
   onLeave: () => void;
@@ -43,6 +44,7 @@ export function LobbyPanel({
   pending,
   actionError,
   opponentEmptyLabel = 'Waiting…',
+  waitingForHost = false,
   onToggleReady,
   onStart,
   onLeave,
@@ -52,7 +54,7 @@ export function LobbyPanel({
 
   const statusCopy = matchStarted
     ? 'Both ready. Starting the race…'
-    : lobbyStatusMessage(bothReady, isHost, waitingName, opponent);
+    : lobbyStatusMessage(bothReady, isHost, waitingName, opponent, waitingForHost);
 
   return (
     <motion.div
@@ -180,12 +182,15 @@ function lobbyStatusMessage(
   isHost: boolean,
   waitingName: string,
   opponent: PlayerRow | null,
+  waitingForHost: boolean,
 ): string {
   if (bothReady) {
     return isHost ? 'Both ready. Start when you are set.' : 'Both ready. Waiting for the host…';
   }
   if (!opponent) {
-    return 'Waiting for a friend to join.';
+    return waitingForHost
+      ? 'Waiting for the host to come back.'
+      : 'Waiting for a friend to join.';
   }
   if (opponent.ready) {
     return 'Waiting for you…';

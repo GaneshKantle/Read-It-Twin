@@ -120,7 +120,7 @@ function isRaceStatus(status: string | undefined | null): boolean {
 }
 
 function errorFromPlayerLeave(notice: LeaveNotice): LobbyError {
-  const copy = leaveNoticeCopy(notice);
+  const copy = leaveNoticeCopy({ ...notice, roomOpen: false });
   return {
     kind: notice.wasHost ? 'host_left' : 'opponent_left',
     title: copy.title.toUpperCase(),
@@ -153,6 +153,7 @@ export function useRoomLobby(roomCodeParam: string) {
     rematch: false,
   });
   const [leaveNotice, setLeaveNotice] = useState<LeaveNotice | null>(null);
+  const [rejoinNickname, setRejoinNickname] = useState<string | null>(null);
   const [focusLossCount, setFocusLossCount] = useState(0);
   const [passageLoading, setPassageLoading] = useState(false);
   const [connectionHealth, setConnectionHealth] = useState<ConnectionHealth>('connected');
@@ -310,6 +311,10 @@ export function useRoomLobby(roomCodeParam: string) {
     }
 
     setPlayers(next);
+
+    if (leavingSelfRef.current) {
+      return next;
+    }
 
     const currentRoom = roomRef.current;
     if (
@@ -722,6 +727,8 @@ export function useRoomLobby(roomCodeParam: string) {
             {
               nickname: nextRoom.last_left_nickname,
               wasHost: nextRoom.last_left_was_host,
+              roomOpen:
+                nextRoom.status === 'waiting' || nextRoom.status === 'ready',
             },
             nextRoom.last_left_at,
           );
@@ -825,6 +832,8 @@ export function useRoomLobby(roomCodeParam: string) {
         rememberLeave({
           nickname: event.nickname || cached?.nickname || 'Your opponent',
           wasHost: event.wasHost || Boolean(event.playerId && event.playerId === lastKnownHostIdRef.current),
+          roomOpen:
+            roomRef.current?.status === 'waiting' || roomRef.current?.status === 'ready',
         });
       },
       onSubscribed: () => {
@@ -872,7 +881,9 @@ export function useRoomLobby(roomCodeParam: string) {
     room?.id,
   ]);
 
-  const hostPlayer = players.find((player) => player.id === room?.host_player_id) ?? players[0] ?? null;
+  const hostPlayer = room?.host_player_id
+    ? players.find((player) => player.id === room.host_player_id) ?? null
+    : null;
   const selfPlayer = session ? players.find((player) => player.id === session.playerId) ?? null : null;
   const opponent = session
     ? players.find((player) => player.id !== session.playerId) ?? null
@@ -984,6 +995,7 @@ export function useRoomLobby(roomCodeParam: string) {
         setRoom(result.room);
         await refreshPlayers(result.room.id);
         setLeaveNotice(null);
+        setRejoinNickname(null);
         setPhase('lobby');
         track('room_joined');
       } catch (err) {
@@ -1062,7 +1074,7 @@ export function useRoomLobby(roomCodeParam: string) {
   const handleLeave = useCallback(async () => {
     const current = sessionRef.current;
     if (!current || pending.leave || actionLockRef.current.leave) {
-      return;
+      return { closed: !current, keptSeat: false };
     }
     actionLockRef.current.leave = true;
     leavingSelfRef.current = true;
@@ -1078,19 +1090,28 @@ export function useRoomLobby(roomCodeParam: string) {
           currentRoom.status === 'reading' ||
           currentRoom.status === 'quiz')
       ) {
-        // Navigating home mid-race keeps session for refresh recovery
         leavingSelfRef.current = false;
-      } else {
-        await notifyLeftRef.current?.({
-          playerId: current.playerId,
-          nickname: self?.nickname ?? 'A player',
-          wasHost: Boolean(wasHost),
-        });
-        // Lobby or results: end the seat/session on the server.
-        await leaveRoom(current.playerId, current.sessionToken);
-        clearRoomSession();
-        setSession(null);
+        return { closed: false, keptSeat: true };
       }
+
+      await notifyLeftRef.current?.({
+        playerId: current.playerId,
+        nickname: self?.nickname ?? 'A player',
+        wasHost: Boolean(wasHost),
+      });
+      const result = await leaveRoom(current.playerId, current.sessionToken);
+      clearRoomSession();
+      setSession(null);
+      setLeaveNotice(null);
+      setRejoinNickname(self?.nickname ?? null);
+
+      if (result.closed) {
+        return { closed: true, keptSeat: false };
+      }
+
+      setPhase('join');
+      leavingSelfRef.current = false;
+      return { closed: false, keptSeat: false };
     } catch {
       leavingSelfRef.current = false;
       if (
@@ -1101,6 +1122,7 @@ export function useRoomLobby(roomCodeParam: string) {
         clearRoomSession();
         setSession(null);
       }
+      return { closed: true, keptSeat: false };
     } finally {
       actionLockRef.current.leave = false;
       setPending((prev) => ({ ...prev, leave: false }));
@@ -1289,6 +1311,7 @@ export function useRoomLobby(roomCodeParam: string) {
     canStart,
     matchStarted,
     leaveNotice,
+    rejoinNickname,
     handleJoin,
     handleToggleReady,
     handleStart,

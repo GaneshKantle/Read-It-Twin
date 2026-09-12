@@ -3,6 +3,7 @@ import type { PlayerRow } from '@/types/database';
 export type LeaveNotice = {
   nickname: string;
   wasHost: boolean;
+  roomOpen?: boolean;
 };
 
 export function leaveNoticeCopy(notice: LeaveNotice): { title: string; body: string } {
@@ -10,7 +11,10 @@ export function leaveNoticeCopy(notice: LeaveNotice): { title: string; body: str
   if (notice.wasHost) {
     return {
       title: `${name} left`,
-      body: 'The host walked out, so this race closed.',
+      body:
+        notice.roomOpen === false
+          ? 'The host walked out, so this race closed.'
+          : 'The host left the lobby. If they come back, this race continues.',
     };
   }
   return {
@@ -43,5 +47,6 @@ export function detectPlayerLeave(
   return {
     nickname: gone.nickname,
     wasHost: Boolean(hostPlayerId) && gone.id === hostPlayerId,
+    roomOpen: true,
   };
 }

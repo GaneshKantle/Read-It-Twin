@@ -8,13 +8,21 @@ import { fadeUp, staggerContainer } from '@/lib/motion';
 type JoinPanelProps = {
   roomCode: string;
   hostName: string | null;
+  initialNickname?: string | null;
   pending: boolean;
   errorMessage: string | null;
   onJoin: (nickname: string) => void;
 };
 
-export function JoinPanel({ roomCode, hostName, pending, errorMessage, onJoin }: JoinPanelProps) {
-  const [nickname, setNickname] = useState('');
+export function JoinPanel({
+  roomCode,
+  hostName,
+  initialNickname = null,
+  pending,
+  errorMessage,
+  onJoin,
+}: JoinPanelProps) {
+  const [nickname, setNickname] = useState(initialNickname?.trim() ?? '');
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -47,6 +55,8 @@ export function JoinPanel({ roomCode, hostName, pending, errorMessage, onJoin }:
             <span className="uppercase">{hostName}</span>
             <span className="block text-muted-foreground">challenged you.</span>
           </>
+        ) : initialNickname ? (
+          'Come back in.'
         ) : (
           'Join the race.'
         )}
@@ -77,7 +87,7 @@ export function JoinPanel({ roomCode, hostName, pending, errorMessage, onJoin }:
         ) : null}
 
         <Button type="submit" size="lg" arrow className="w-full" disabled={pending || !nickname.trim()}>
-          {pending ? 'Joining…' : 'Join race'}
+          {pending ? 'Joining…' : initialNickname ? 'Rejoin race' : 'Join race'}
         </Button>
       </motion.form>
     </motion.div>

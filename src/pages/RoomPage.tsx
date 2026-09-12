@@ -25,8 +25,10 @@ export function RoomPage() {
   });
 
   const handleLeave = async () => {
-    await lobby.handleLeave();
-    navigate('/');
+    const outcome = await lobby.handleLeave();
+    if (outcome.closed || outcome.keptSeat) {
+      navigate('/');
+    }
   };
 
   const racing = lobby.phase === 'racing';
@@ -107,6 +109,7 @@ export function RoomPage() {
             <JoinPanel
               roomCode={lobby.room.room_code}
               hostName={lobby.hostPlayer?.nickname ?? null}
+              initialNickname={lobby.rejoinNickname}
               pending={lobby.pending.join}
               errorMessage={lobby.actionError}
               onJoin={(nickname) => void lobby.handleJoin(nickname)}
@@ -132,8 +135,13 @@ export function RoomPage() {
               pending={lobby.pending}
               actionError={lobby.actionError}
               opponentEmptyLabel={
-                lobby.leaveNotice && !lobby.opponent ? `${lobby.leaveNotice.nickname} left` : undefined
+                lobby.leaveNotice && !lobby.opponent
+                  ? lobby.leaveNotice.wasHost
+                    ? 'Host left'
+                    : `${lobby.leaveNotice.nickname} left`
+                  : undefined
               }
+              waitingForHost={Boolean(lobby.leaveNotice?.wasHost && !lobby.opponent)}
               onToggleReady={() => void lobby.handleToggleReady()}
               onStart={() => void lobby.handleStart()}
               onLeave={() => void handleLeave()}

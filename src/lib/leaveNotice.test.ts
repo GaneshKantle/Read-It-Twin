@@ -29,6 +29,7 @@ describe('detectPlayerLeave', () => {
     expect(detectPlayerLeave([host, guest], [host], 'host', 'host')).toEqual({
       nickname: 'Alex',
       wasHost: false,
+      roomOpen: true,
     });
   });
 
@@ -36,6 +37,7 @@ describe('detectPlayerLeave', () => {
     expect(detectPlayerLeave([host, guest], [guest], 'guest', 'host')).toEqual({
       nickname: 'Maya',
       wasHost: true,
+      roomOpen: true,
     });
   });
 
@@ -57,8 +59,15 @@ describe('leaveNoticeCopy', () => {
     });
   });
 
-  it('names a host departure for the guest', () => {
-    expect(leaveNoticeCopy({ nickname: 'Maya', wasHost: true })).toEqual({
+  it('keeps the lobby open when the host can rejoin', () => {
+    expect(leaveNoticeCopy({ nickname: 'Maya', wasHost: true, roomOpen: true })).toEqual({
+      title: 'Maya left',
+      body: 'The host left the lobby. If they come back, this race continues.',
+    });
+  });
+
+  it('names a host departure when the race closed', () => {
+    expect(leaveNoticeCopy({ nickname: 'Maya', wasHost: true, roomOpen: false })).toEqual({
       title: 'Maya left',
       body: 'The host walked out, so this race closed.',
     });

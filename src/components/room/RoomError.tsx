@@ -33,6 +33,7 @@ export function RoomError({ error, onInviteAgain, onRetry }: RoomErrorProps) {
       ? leaveNoticeCopy({
           nickname: error.opponentName,
           wasHost: error.kind === 'host_left',
+          roomOpen: false,
         })
       : null;
 
