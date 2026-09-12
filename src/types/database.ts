@@ -45,6 +45,9 @@ export type RoomRow = {
   host_player_id: string | null;
   created_at: string;
   expires_at: string;
+  last_left_nickname: string | null;
+  last_left_at: string | null;
+  last_left_was_host: boolean;
 };
 
 export type PlayerRow = {
@@ -239,6 +242,9 @@ export type Database = {
           host_player_id?: string | null;
           created_at?: string;
           expires_at?: string;
+          last_left_nickname?: string | null;
+          last_left_at?: string | null;
+          last_left_was_host?: boolean;
         };
         Update: {
           id?: string;
@@ -248,6 +254,9 @@ export type Database = {
           host_player_id?: string | null;
           created_at?: string;
           expires_at?: string;
+          last_left_nickname?: string | null;
+          last_left_at?: string | null;
+          last_left_was_host?: boolean;
         };
         Relationships: [
           {

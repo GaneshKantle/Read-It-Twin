@@ -17,17 +17,16 @@ type LobbyPanelProps = {
   canStart: boolean;
   matchStarted: boolean;
   match: MatchRow | null;
-  leftOpponentName: string | null;
   pending: {
     ready: boolean;
     start: boolean;
     leave: boolean;
   };
   actionError: string | null;
+  opponentEmptyLabel?: string;
   onToggleReady: () => void;
   onStart: () => void;
   onLeave: () => void;
-  onDismissOpponentLeft: () => void;
 };
 
 export function LobbyPanel({
@@ -41,13 +40,12 @@ export function LobbyPanel({
   canStart,
   matchStarted,
   match: _match,
-  leftOpponentName,
   pending,
   actionError,
+  opponentEmptyLabel = 'Waiting…',
   onToggleReady,
   onStart,
   onLeave,
-  onDismissOpponentLeft,
 }: LobbyPanelProps) {
   const waitingName = opponent?.nickname ?? 'opponent';
   const selfReady = selfPlayer?.ready ?? false;
@@ -83,23 +81,6 @@ export function LobbyPanel({
         <CopyInviteButton roomCode={room.room_code} disabled={matchStarted} />
       </motion.div>
 
-      {leftOpponentName ? (
-        <motion.div
-          variants={fadeUp}
-          className="mt-6 rounded-lg border-2 border-ink bg-soft-pink p-5 text-black"
-        >
-          <p className="font-display text-2xl font-extrabold uppercase tracking-[-0.03em]">
-            {leftOpponentName} left
-          </p>
-          <Text as="p" variant="small" className="mt-2 text-black/70">
-            Your opponent left the room. Share the invite again when you are ready.
-          </Text>
-          <Button size="md" className="mt-4" onClick={onDismissOpponentLeft}>
-            Invite again
-          </Button>
-        </motion.div>
-      ) : null}
-
       <motion.div
         variants={fadeUp}
         className="relative mt-10 grid gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-center"
@@ -121,7 +102,7 @@ export function LobbyPanel({
           player={opponent}
           accent="bg-cyan"
           isHost={opponent?.id === hostPlayerId}
-          emptyLabel="Waiting…"
+          emptyLabel={opponentEmptyLabel}
         />
       </motion.div>
 

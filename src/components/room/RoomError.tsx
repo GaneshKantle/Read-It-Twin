@@ -4,6 +4,7 @@ import { Container } from '@/components/layout/Container';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { fadeUp, staggerContainer } from '@/lib/motion';
+import { leaveNoticeCopy } from '@/lib/leaveNotice';
 import type { LobbyError } from '@/hooks/useRoomLobby';
 
 type RoomErrorProps = {
@@ -27,6 +28,14 @@ export function RoomError({ error, onInviteAgain, onRetry }: RoomErrorProps) {
     Boolean(onInviteAgain) && (error.kind === 'opponent_left' || error.kind === 'full');
   const hasPrimary = canRetry || showInviteAgain || canCreateNew;
 
+  const named =
+    error.opponentName && (error.kind === 'host_left' || error.kind === 'opponent_left')
+      ? leaveNoticeCopy({
+          nickname: error.opponentName,
+          wasHost: error.kind === 'host_left',
+        })
+      : null;
+
   return (
     <Container className="py-14 sm:py-20">
       <motion.div
@@ -37,11 +46,16 @@ export function RoomError({ error, onInviteAgain, onRetry }: RoomErrorProps) {
       >
         <motion.div variants={fadeUp}>
           <span className="inline-flex items-center rounded-full bg-ink px-4 py-1.5 text-label font-bold text-background">
-            {error.title}
+            {named ? 'Just now' : error.title}
           </span>
           <Text as="h1" variant="subheading" className="mt-5">
-            {error.message}
+            {named ? named.title : error.message}
           </Text>
+          {named ? (
+            <Text as="p" variant="small" className="mt-3 text-muted-foreground">
+              {named.body}
+            </Text>
+          ) : null}
         </motion.div>
 
         <motion.div variants={fadeUp} className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">

@@ -21,9 +21,10 @@ import {
   requestRematch,
   setPlayerReady,
 } from '@/lib/services/players';
-import { subscribeToRoom } from '@/lib/services/realtime';
+import { subscribeToRoom, type PlayerLeftEvent } from '@/lib/services/realtime';
 import { getMatchResults, getPlayerResultForMatch } from '@/lib/services/results';
 import { classifyRoomState, lookupRoomByCode } from '@/lib/services/rooms';
+import { detectPlayerLeave, leaveNoticeCopy, type LeaveNotice } from '@/lib/leaveNotice';
 import {
   clearRoomSession,
   getOrCreateClientId,
@@ -118,6 +119,16 @@ function isRaceStatus(status: string | undefined | null): boolean {
   return Boolean(status && RACE_STATUSES.has(status));
 }
 
+function errorFromPlayerLeave(notice: LeaveNotice): LobbyError {
+  const copy = leaveNoticeCopy(notice);
+  return {
+    kind: notice.wasHost ? 'host_left' : 'opponent_left',
+    title: copy.title.toUpperCase(),
+    message: copy.body,
+    opponentName: notice.nickname,
+  };
+}
+
 export function useRoomLobby(roomCodeParam: string) {
   const roomCode = roomCodeParam.trim().toUpperCase();
 
@@ -141,7 +152,7 @@ export function useRoomLobby(roomCodeParam: string) {
     quiz: false,
     rematch: false,
   });
-  const [leftOpponentName, setLeftOpponentName] = useState<string | null>(null);
+  const [leaveNotice, setLeaveNotice] = useState<LeaveNotice | null>(null);
   const [focusLossCount, setFocusLossCount] = useState(0);
   const [passageLoading, setPassageLoading] = useState(false);
   const [connectionHealth, setConnectionHealth] = useState<ConnectionHealth>('connected');
@@ -154,6 +165,10 @@ export function useRoomLobby(roomCodeParam: string) {
   const refreshingRef = useRef(false);
   const ackSentRef = useRef<string | null>(null);
   const passageIdRef = useRef<string | null>(null);
+  const lastKnownHostIdRef = useRef<string | null>(null);
+  const lastSeenLeaveAtRef = useRef<string | null>(null);
+  const notifyLeftRef = useRef<((event: PlayerLeftEvent) => Promise<void>) | null>(null);
+  const leavingSelfRef = useRef(false);
   const actionLockRef = useRef({
     join: false,
     ready: false,
@@ -174,6 +189,9 @@ export function useRoomLobby(roomCodeParam: string) {
 
   useEffect(() => {
     roomRef.current = room;
+    if (room?.host_player_id) {
+      lastKnownHostIdRef.current = room.host_player_id;
+    }
   }, [room]);
 
   useEffect(() => {
@@ -182,6 +200,19 @@ export function useRoomLobby(roomCodeParam: string) {
 
   const syncClockOffset = useCallback(() => {
     setClockOffsetMs(getClockOffsetMs());
+  }, []);
+
+  const rememberLeave = useCallback((notice: LeaveNotice, leftAt?: string | null) => {
+    if (leavingSelfRef.current) {
+      return;
+    }
+    if (leftAt) {
+      if (lastSeenLeaveAtRef.current === leftAt) {
+        return;
+      }
+      lastSeenLeaveAtRef.current = leftAt;
+    }
+    setLeaveNotice(notice);
   }, []);
 
   const loadPassageForMatch = useCallback(async (nextMatch: MatchRow | null) => {
@@ -264,18 +295,18 @@ export function useRoomLobby(roomCodeParam: string) {
     const currentSession = sessionRef.current;
     const previous = playersRef.current;
 
-    if (currentSession && previous.length === 2 && next.length === 1) {
-      const remaining = next[0];
-      if (remaining.id === currentSession.playerId) {
-        const gone = previous.find((player) => player.id !== currentSession.playerId);
-        if (gone) {
-          setLeftOpponentName(gone.nickname);
-        }
-      }
+    const detected = detectPlayerLeave(
+      previous,
+      next,
+      currentSession?.playerId ?? null,
+      lastKnownHostIdRef.current,
+    );
+    if (detected) {
+      rememberLeave(detected);
     }
 
     if (next.length === 2) {
-      setLeftOpponentName(null);
+      setLeaveNotice(null);
     }
 
     setPlayers(next);
@@ -290,11 +321,11 @@ export function useRoomLobby(roomCodeParam: string) {
       clearRoomSession();
       setSession(null);
       if (currentRoom.status === 'closed' || currentRoom.host_player_id === currentSession.playerId) {
-        setError({
-          kind: 'host_left',
-          title: 'THE HOST LEFT',
-          message: 'The host left the room, so this race was closed.',
-        });
+        const notice: LeaveNotice = {
+          nickname: currentRoom.last_left_nickname?.trim() || 'The host',
+          wasHost: true,
+        };
+        setError(errorFromPlayerLeave(notice));
       } else {
         setError({
           kind: 'closed',
@@ -306,7 +337,7 @@ export function useRoomLobby(roomCodeParam: string) {
     }
 
     return next;
-  }, []);
+  }, [rememberLeave]);
 
   const applyRoomPhase = useCallback((nextRoom: RoomRow) => {
     if (isRaceStatus(nextRoom.status)) {
@@ -366,13 +397,22 @@ export function useRoomLobby(roomCodeParam: string) {
         // Mid-race close is unusual; still surface it
         if (!isRaceStatus(lookup.room.status)) {
           clearRoomSession();
-          setError({
-            kind: isHost ? 'closed' : 'host_left',
-            title: isHost ? 'ROOM CLOSED' : 'THE HOST LEFT',
-            message: isHost
-              ? 'This room is no longer open.'
-              : 'The host left the room, so this race was closed.',
-          });
+          if (lookup.room.last_left_nickname) {
+            setError(
+              errorFromPlayerLeave({
+                nickname: lookup.room.last_left_nickname,
+                wasHost: lookup.room.last_left_was_host || !isHost,
+              }),
+            );
+          } else {
+            setError({
+              kind: isHost ? 'closed' : 'host_left',
+              title: isHost ? 'ROOM CLOSED' : 'THE HOST LEFT',
+              message: isHost
+                ? 'This room is no longer open.'
+                : 'The host left the room, so this race was closed.',
+            });
+          }
           setPhase('error');
           return;
         }
@@ -500,6 +540,7 @@ export function useRoomLobby(roomCodeParam: string) {
         }
 
         setRoom(lookup.room);
+        lastSeenLeaveAtRef.current = lookup.room.last_left_at ?? null;
 
         if (lookup.state === 'expired') {
           setError({
@@ -537,9 +578,20 @@ export function useRoomLobby(roomCodeParam: string) {
             }
           }
           setError({
-            kind: 'closed',
-            title: 'ROOM CLOSED',
-            message: 'This room is no longer open.',
+            kind: lookup.room.last_left_was_host ? 'host_left' : 'closed',
+            title: lookup.room.last_left_was_host
+              ? leaveNoticeCopy({
+                  nickname: lookup.room.last_left_nickname?.trim() || 'The host',
+                  wasHost: true,
+                }).title.toUpperCase()
+              : 'ROOM CLOSED',
+            message: lookup.room.last_left_was_host
+              ? leaveNoticeCopy({
+                  nickname: lookup.room.last_left_nickname?.trim() || 'The host',
+                  wasHost: true,
+                }).body
+              : 'This room is no longer open.',
+            opponentName: lookup.room.last_left_nickname?.trim() || undefined,
           });
           setPhase('error');
           return;
@@ -649,7 +701,7 @@ export function useRoomLobby(roomCodeParam: string) {
       return;
     }
 
-    const unsubscribe = subscribeToRoom(currentRoom.id, {
+    const handle = subscribeToRoom(currentRoom.id, {
       onRoomChange: (nextRoom) => {
         const previousStatus = roomRef.current?.status;
         setRoom(nextRoom);
@@ -663,6 +715,16 @@ export function useRoomLobby(roomCodeParam: string) {
           });
           setPhase('error');
           return;
+        }
+
+        if (nextRoom.last_left_at && nextRoom.last_left_nickname) {
+          rememberLeave(
+            {
+              nickname: nextRoom.last_left_nickname,
+              wasHost: nextRoom.last_left_was_host,
+            },
+            nextRoom.last_left_at,
+          );
         }
 
         // Rematch both-ready: return to lobby with a fresh passage.
@@ -690,12 +752,12 @@ export function useRoomLobby(roomCodeParam: string) {
             setPhase('racing');
             return;
           }
+          const notice: LeaveNotice = {
+            nickname: nextRoom.last_left_nickname?.trim() || 'The host',
+            wasHost: nextRoom.last_left_was_host,
+          };
           clearRoomSession();
-          setError({
-            kind: 'host_left',
-            title: 'THE HOST LEFT',
-            message: 'The host left the room, so this race was closed.',
-          });
+          setError(errorFromPlayerLeave(notice));
           setPhase('error');
           return;
         }
@@ -753,6 +815,18 @@ export function useRoomLobby(roomCodeParam: string) {
       onPlayersChange: () => {
         void refreshSnapshot();
       },
+      onPlayerLeft: (event) => {
+        if (event.playerId && event.playerId === sessionRef.current?.playerId) {
+          return;
+        }
+        const cached = event.playerId
+          ? playersRef.current.find((player) => player.id === event.playerId)
+          : undefined;
+        rememberLeave({
+          nickname: event.nickname || cached?.nickname || 'Your opponent',
+          wasHost: event.wasHost || Boolean(event.playerId && event.playerId === lastKnownHostIdRef.current),
+        });
+      },
       onSubscribed: () => {
         setConnectionHealth('connected');
         void refreshSnapshot();
@@ -779,7 +853,12 @@ export function useRoomLobby(roomCodeParam: string) {
       },
     });
 
-    return unsubscribe;
+    notifyLeftRef.current = handle.notifyPlayerLeft;
+
+    return () => {
+      notifyLeftRef.current = null;
+      handle.unsubscribe();
+    };
   }, [
     loadAllResults,
     loadOwnResult,
@@ -788,6 +867,7 @@ export function useRoomLobby(roomCodeParam: string) {
     phase,
     refreshPlayers,
     refreshSnapshot,
+    rememberLeave,
     resolveMatchForRoomStatus,
     room?.id,
   ]);
@@ -903,7 +983,7 @@ export function useRoomLobby(roomCodeParam: string) {
         setSession(nextSession);
         setRoom(result.room);
         await refreshPlayers(result.room.id);
-        setLeftOpponentName(null);
+        setLeaveNotice(null);
         setPhase('lobby');
         track('room_joined');
       } catch (err) {
@@ -985,9 +1065,12 @@ export function useRoomLobby(roomCodeParam: string) {
       return;
     }
     actionLockRef.current.leave = true;
+    leavingSelfRef.current = true;
     setPending((prev) => ({ ...prev, leave: true }));
     try {
       const currentRoom = roomRef.current;
+      const self = playersRef.current.find((player) => player.id === current.playerId);
+      const wasHost = currentRoom?.host_player_id === current.playerId;
       // Mid-race (countdown/reading/quiz): keep server seat for refresh recovery.
       if (
         currentRoom &&
@@ -996,13 +1079,20 @@ export function useRoomLobby(roomCodeParam: string) {
           currentRoom.status === 'quiz')
       ) {
         // Navigating home mid-race keeps session for refresh recovery
+        leavingSelfRef.current = false;
       } else {
+        await notifyLeftRef.current?.({
+          playerId: current.playerId,
+          nickname: self?.nickname ?? 'A player',
+          wasHost: Boolean(wasHost),
+        });
         // Lobby or results: end the seat/session on the server.
         await leaveRoom(current.playerId, current.sessionToken);
         clearRoomSession();
         setSession(null);
       }
     } catch {
+      leavingSelfRef.current = false;
       if (
         roomRef.current?.status !== 'countdown' &&
         roomRef.current?.status !== 'reading' &&
@@ -1131,8 +1221,8 @@ export function useRoomLobby(roomCodeParam: string) {
     setFocusLossCount((count) => count + 1);
   }, []);
 
-  const dismissOpponentLeft = useCallback(() => {
-    setLeftOpponentName(null);
+  const dismissLeaveNotice = useCallback(() => {
+    setLeaveNotice(null);
   }, []);
 
   const retryBoot = useCallback(() => {
@@ -1198,7 +1288,7 @@ export function useRoomLobby(roomCodeParam: string) {
     canToggleReady,
     canStart,
     matchStarted,
-    leftOpponentName,
+    leaveNotice,
     handleJoin,
     handleToggleReady,
     handleStart,
@@ -1208,7 +1298,7 @@ export function useRoomLobby(roomCodeParam: string) {
     handleSubmitQuiz,
     handleCountdownComplete,
     registerFocusLoss,
-    dismissOpponentLeft,
+    dismissLeaveNotice,
     retryBoot,
     retryConnection,
   };

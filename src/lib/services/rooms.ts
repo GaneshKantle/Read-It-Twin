@@ -14,7 +14,13 @@ export function parseRoomRow(value: unknown): RoomRow {
   if (!row || typeof row.id !== 'string' || typeof row.room_code !== 'string') {
     throw new AppError('INVALID_ROOM', { message: 'Malformed room payload' });
   }
-  return row as unknown as RoomRow;
+  return {
+    ...(row as unknown as RoomRow),
+    last_left_nickname:
+      typeof row.last_left_nickname === 'string' ? row.last_left_nickname : null,
+    last_left_at: typeof row.last_left_at === 'string' ? row.last_left_at : null,
+    last_left_was_host: row.last_left_was_host === true,
+  };
 }
 
 export function parsePlayerRow(value: unknown): PlayerRow {
@@ -99,7 +105,7 @@ export async function getRoomByCode(roomCode: string): Promise<RoomRow> {
     throw new AppError('INVALID_ROOM');
   }
 
-  return data as RoomRow;
+  return parseRoomRow(data);
 }
 
 /**
@@ -135,7 +141,7 @@ export async function getRoomById(roomId: string): Promise<RoomRow> {
     throw new AppError('EXPIRED_ROOM', { message: `Room ${data.room_code} is expired or closed` });
   }
 
-  return data;
+  return parseRoomRow(data);
 }
 
 /** Soft-close helper — revoked for anon clients in Phase 10. Rooms expire on read. */

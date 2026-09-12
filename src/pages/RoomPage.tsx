@@ -4,6 +4,7 @@ import { LobbyPanel } from '@/components/room/LobbyPanel';
 import { MatchQuizScreen } from '@/components/room/MatchQuizScreen';
 import { MatchReadingScreen } from '@/components/room/MatchReadingScreen';
 import { MatchResultsScreen } from '@/components/room/MatchResultsScreen';
+import { PlayerLeaveNotice } from '@/components/room/PlayerLeaveNotice';
 import { RoomError } from '@/components/room/RoomError';
 import { Container } from '@/components/layout/Container';
 import { RunTopBar } from '@/components/run/RunTopBar';
@@ -89,6 +90,17 @@ export function RoomPage() {
         ) : null
       ) : null}
 
+      {(lobby.phase === 'lobby' || lobby.phase === 'racing') && lobby.leaveNotice ? (
+        <div className="px-4 pt-6">
+          <Container>
+            <PlayerLeaveNotice
+              notice={lobby.leaveNotice}
+              onDismiss={lobby.dismissLeaveNotice}
+            />
+          </Container>
+        </div>
+      ) : null}
+
       {lobby.phase === 'join' && lobby.room ? (
         <main className="flex-1">
           <Container className="py-8 sm:py-12 lg:py-16">
@@ -117,13 +129,14 @@ export function RoomPage() {
               canStart={lobby.canStart}
               matchStarted={lobby.matchStarted}
               match={lobby.match}
-              leftOpponentName={lobby.leftOpponentName}
               pending={lobby.pending}
               actionError={lobby.actionError}
+              opponentEmptyLabel={
+                lobby.leaveNotice && !lobby.opponent ? `${lobby.leaveNotice.nickname} left` : undefined
+              }
               onToggleReady={() => void lobby.handleToggleReady()}
               onStart={() => void lobby.handleStart()}
               onLeave={() => void handleLeave()}
-              onDismissOpponentLeft={lobby.dismissOpponentLeft}
             />
           </Container>
         </main>
